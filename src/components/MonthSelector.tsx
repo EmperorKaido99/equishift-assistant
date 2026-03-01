@@ -5,7 +5,6 @@ interface MonthSelectorProps {
   month: number;
   onYearChange: (y: number) => void;
   onMonthChange: (m: number) => void;
-  onGenerate: () => void;
 }
 
 const MONTHS = [
@@ -14,7 +13,7 @@ const MONTHS = [
 ];
 
 const MonthSelector: React.FC<MonthSelectorProps> = ({
-  year, month, onYearChange, onMonthChange, onGenerate,
+  year, month, onYearChange, onMonthChange,
 }) => {
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -36,12 +35,6 @@ const MonthSelector: React.FC<MonthSelectorProps> = ({
           <option key={y} value={y}>{y}</option>
         ))}
       </select>
-      <button
-        onClick={onGenerate}
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95"
-      >
-        Generate Schedule
-      </button>
     </div>
   );
 };

@@ -4,6 +4,7 @@ import MonthSelector from '@/components/MonthSelector';
 import ScheduleList from '@/components/ScheduleList';
 import ChatPanel from '@/components/ChatPanel';
 import StaffStatsBar from '@/components/StaffStatsBar';
+import SchedulePrompt from '@/components/SchedulePrompt';
 import { Printer, Calendar, MessageCircle } from 'lucide-react';
 
 const Index: React.FC = () => {
@@ -42,7 +43,6 @@ const Index: React.FC = () => {
                 month={month}
                 onYearChange={setYear}
                 onMonthChange={setMonth}
-                onGenerate={generate}
               />
               {schedule && (
                 <button
@@ -91,20 +91,17 @@ const Index: React.FC = () => {
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-4">
         {!schedule ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
-            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4">
-              <Calendar className="h-8 w-8 text-primary" />
+          <div className="py-8 animate-fade-in">
+            <div className="text-center mb-6">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4 mx-auto">
+                <Calendar className="h-8 w-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-bold text-foreground mb-1">Welcome to EquiShift</h2>
+              <p className="text-sm text-muted-foreground max-w-md mx-auto">
+                Select a month above, choose your shift pattern, and generate a fair schedule.
+              </p>
             </div>
-            <h2 className="text-xl font-bold text-foreground mb-2">Welcome to EquiShift</h2>
-            <p className="text-sm text-muted-foreground max-w-md mb-6">
-              Select a month and click "Generate Schedule" to create a fair work shift distribution for your team.
-            </p>
-            <button
-              onClick={generate}
-              className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95"
-            >
-              Generate Schedule
-            </button>
+            <SchedulePrompt onGenerate={generate} />
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row gap-4">

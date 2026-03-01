@@ -11,7 +11,7 @@ interface ChatPanelProps {
 const SUGGESTIONS = [
   'show stats',
   'who works Monday?',
-  'swap Alex and Casey on Monday night',
+  'swap Yvette and Sandra on Monday night',
   'help',
 ];
 
