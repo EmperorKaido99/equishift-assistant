@@ -40,19 +40,26 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+export type SchedulePattern = 'mixed' | '2week' | '1week';
+
+export interface ScheduleOptions {
+  pattern: SchedulePattern;
+  groupTogether?: string[][]; // groups of names to put on same shift
+}
+
 export const STAFF_MEMBERS: StaffMember[] = [
-  { name: 'Sarah', role: 'supervisor' },
-  { name: 'Mike', role: 'cleaner' },
-  { name: 'Alex', role: 'regular' },
-  { name: 'Jordan', role: 'regular' },
-  { name: 'Taylor', role: 'regular' },
-  { name: 'Casey', role: 'regular' },
-  { name: 'Riley', role: 'regular' },
-  { name: 'Morgan', role: 'regular' },
-  { name: 'Quinn', role: 'regular' },
-  { name: 'Avery', role: 'regular' },
-  { name: 'Blake', role: 'regular' },
-  { name: 'Cameron', role: 'regular' },
+  { name: 'Tracey', role: 'supervisor' },
+  { name: 'Shariefa', role: 'cleaner' },
+  { name: 'Yvette', role: 'regular' },
+  { name: 'Sandra', role: 'regular' },
+  { name: 'Logan', role: 'regular' },
+  { name: 'Sharon', role: 'regular' },
+  { name: 'Zeena', role: 'regular' },
+  { name: 'Lauren', role: 'regular' },
+  { name: 'Veronica', role: 'regular' },
+  { name: 'Aasiyah', role: 'regular' },
+  { name: 'Nicole', role: 'regular' },
+  { name: 'Joyce', role: 'regular' },
 ];
 
 export const REGULAR_STAFF = STAFF_MEMBERS.filter(s => s.role === 'regular');

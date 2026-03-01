@@ -127,10 +127,10 @@ export function processChat(
   if (lower.includes('help') || lower === '?') {
     return {
       response: `💡 **Here's what I can do:**\n\n` +
-        `• **Swap shifts:** "swap Alex and Casey on Monday night"\n` +
-        `• **Move staff:** "move Alex to day shift on Tuesday"\n` +
+        `• **Swap shifts:** "swap Yvette and Sandra on Monday night"\n` +
+        `• **Move staff:** "move Logan to day shift on Tuesday"\n` +
         `• **View schedule:** "who works Christmas Day?"\n` +
-        `• **Check availability:** "is Sarah working next Friday?"\n` +
+        `• **Check availability:** "is Tracey working next Friday?"\n` +
         `• **Show stats:** "show stats"\n` +
         `• **Balance shifts:** "rebalance day/night for everyone"\n` +
         `• **Undo:** "undo last change"\n`
@@ -138,7 +138,7 @@ export function processChat(
   }
 
   return {
-    response: "🤔 I didn't understand that. Try commands like:\n• \"swap Alex and Casey on Monday night\"\n• \"move Alex to day shift on Tuesday\"\n• \"who works Monday?\"\n• Type **help** for all commands."
+    response: "🤔 I didn't understand that. Try commands like:\n• \"swap Yvette and Sandra on Monday night\"\n• \"move Logan to day shift on Tuesday\"\n• \"who works Monday?\"\n• Type **help** for all commands."
   };
 }
 

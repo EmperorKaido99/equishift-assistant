@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { MonthSchedule, ChatMessage } from '@/types/schedule';
+import { MonthSchedule, ChatMessage, ScheduleOptions } from '@/types/schedule';
 import { generateSchedule, getStaffStats } from '@/utils/scheduleGenerator';
 import { processChat } from '@/utils/chatProcessor';
 
@@ -54,16 +54,17 @@ export function useSchedule() {
     saveChat(messages);
   }, [messages]);
 
-  const generate = useCallback(() => {
-    const newSchedule = generateSchedule(year, month);
+  const generate = useCallback((options?: ScheduleOptions) => {
+    const newSchedule = generateSchedule(year, month, options);
     setSchedule(newSchedule);
     historyRef.current = [];
     setHighlightDays([]);
     
+    const patternLabel = options?.pattern === '2week' ? '2-week rotation' : options?.pattern === '1week' ? '1-week rotation' : 'mixed shifts';
     const msg: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'assistant',
-      content: `✅ Schedule generated for **${new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}**! ${newSchedule.days.length} days created with fair shift distribution.\n\nType **help** to see what I can do, or ask me anything about the schedule.`,
+      content: `✅ Schedule generated for **${new Date(year, month).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}** with **${patternLabel}**! ${newSchedule.days.length} days created.\n\nType **help** to see what I can do.`,
       timestamp: new Date(),
     };
     setMessages([msg]);
