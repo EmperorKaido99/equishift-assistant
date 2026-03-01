@@ -1,12 +1,132 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import React, { useState } from 'react';
+import { useSchedule } from '@/hooks/useSchedule';
+import MonthSelector from '@/components/MonthSelector';
+import ScheduleList from '@/components/ScheduleList';
+import ChatPanel from '@/components/ChatPanel';
+import StaffStatsBar from '@/components/StaffStatsBar';
+import { Printer, Calendar, MessageCircle } from 'lucide-react';
 
-const Index = () => {
+const Index: React.FC = () => {
+  const {
+    year, setYear,
+    month, setMonth,
+    schedule,
+    messages,
+    highlightDays,
+    stats,
+    generate,
+    sendMessage,
+  } = useSchedule();
+
+  const [mobileTab, setMobileTab] = useState<'schedule' | 'chat'>('schedule');
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
-      </div>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="no-print sticky top-0 z-10 border-b border-border bg-card/80 backdrop-blur-sm">
+        <div className="mx-auto max-w-7xl px-4 py-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
+                E
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-foreground leading-tight">EquiShift</h1>
+                <p className="text-xs text-muted-foreground">Fair shift scheduling</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <MonthSelector
+                year={year}
+                month={month}
+                onYearChange={setYear}
+                onMonthChange={setMonth}
+                onGenerate={generate}
+              />
+              {schedule && (
+                <button
+                  onClick={() => window.print()}
+                  className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground transition-colors"
+                  title="Print schedule"
+                >
+                  <Printer className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile Tab Switcher */}
+      {schedule && (
+        <div className="no-print lg:hidden sticky top-[73px] z-10 border-b border-border bg-card">
+          <div className="flex">
+            <button
+              onClick={() => setMobileTab('schedule')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${
+                mobileTab === 'schedule'
+                  ? 'text-foreground border-b-2 border-primary'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              <Calendar className="h-4 w-4" />
+              Schedule
+            </button>
+            <button
+              onClick={() => setMobileTab('chat')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium transition-colors ${
+                mobileTab === 'chat'
+                  ? 'text-foreground border-b-2 border-primary'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              <MessageCircle className="h-4 w-4" />
+              Chat
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <main className="mx-auto max-w-7xl px-4 py-4">
+        {!schedule ? (
+          <div className="flex flex-col items-center justify-center py-24 text-center animate-fade-in">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 mb-4">
+              <Calendar className="h-8 w-8 text-primary" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground mb-2">Welcome to EquiShift</h2>
+            <p className="text-sm text-muted-foreground max-w-md mb-6">
+              Select a month and click "Generate Schedule" to create a fair work shift distribution for your team.
+            </p>
+            <button
+              onClick={generate}
+              className="rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground transition-all hover:opacity-90 active:scale-95"
+            >
+              Generate Schedule
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Schedule Panel */}
+            <div className={`flex-1 min-w-0 ${mobileTab !== 'schedule' ? 'hidden lg:block' : ''}`}>
+              <StaffStatsBar stats={stats} />
+              <div className="mt-3">
+                <ScheduleList schedule={schedule} highlightDays={highlightDays} />
+              </div>
+            </div>
+
+            {/* Chat Panel */}
+            <div className={`lg:w-96 lg:sticky lg:top-[73px] lg:h-[calc(100vh-89px)] ${mobileTab !== 'chat' ? 'hidden lg:block' : 'h-[calc(100vh-130px)]'}`}>
+              <ChatPanel
+                messages={messages}
+                onSend={sendMessage}
+                disabled={!schedule}
+              />
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };
