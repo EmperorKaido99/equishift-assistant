@@ -142,16 +142,35 @@
   body {
     background: white !important;
     color: black !important;
-    font-size: 11px;
+    font-size: 9px;
   }
 
-  .print-schedule {
-    break-inside: avoid;
+  /* Hide the list view when printing */
+  .print-schedule,
+  .space-y-1 {
+    display: none !important;
   }
 
-  .print-schedule h2 {
-    font-size: 14px;
-    font-weight: bold;
-    margin-bottom: 4px;
+  .print-table-container {
+    display: block !important;
+  }
+
+  .print-table {
+    page-break-inside: auto;
+  }
+
+  .print-table tr {
+    page-break-inside: avoid;
+  }
+
+  .print-table th,
+  .print-table td {
+    padding: 1px 3px;
+    font-size: 8px;
+  }
+
+  @page {
+    size: landscape;
+    margin: 0.5cm;
   }
 }
