@@ -6,6 +6,7 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   onSend: (message: string) => void;
   disabled?: boolean;
+  isLoading?: boolean;
 }
 
 const SUGGESTIONS = [
@@ -15,7 +16,7 @@ const SUGGESTIONS = [
   'help',
 ];
 
-const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSend, disabled }) => {
+const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSend, disabled, isLoading }) => {
   const [input, setInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -61,6 +62,17 @@ const ChatPanel: React.FC<ChatPanelProps> = ({ messages, onSend, disabled }) => 
             </div>
           </div>
         ))}
+        {isLoading && (
+          <div className="flex justify-start animate-fade-in">
+            <div className="rounded-xl px-3 py-2 text-sm bg-chat-assistant text-chat-assistant-foreground border border-border rounded-bl-sm">
+              <span className="inline-flex gap-1">
+                <span className="animate-pulse">●</span>
+                <span className="animate-pulse" style={{ animationDelay: '0.2s' }}>●</span>
+                <span className="animate-pulse" style={{ animationDelay: '0.4s' }}>●</span>
+              </span>
+            </div>
+          </div>
+        )}
         <div ref={messagesEndRef} />
       </div>
 

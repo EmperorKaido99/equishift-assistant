@@ -5,7 +5,8 @@ import ScheduleList from '@/components/ScheduleList';
 import ChatPanel from '@/components/ChatPanel';
 import StaffStatsBar from '@/components/StaffStatsBar';
 import SchedulePrompt from '@/components/SchedulePrompt';
-import { Printer, Calendar, MessageCircle } from 'lucide-react';
+import PrintableTable from '@/components/PrintableTable';
+import { Printer, Calendar, MessageCircle, ArrowLeft } from 'lucide-react';
 
 const Index: React.FC = () => {
   const {
@@ -15,8 +16,10 @@ const Index: React.FC = () => {
     messages,
     highlightDays,
     stats,
+    isAiLoading,
     generate,
     sendMessage,
+    resetSchedule,
   } = useSchedule();
 
   const [mobileTab, setMobileTab] = useState<'schedule' | 'chat'>('schedule');
@@ -28,6 +31,15 @@ const Index: React.FC = () => {
         <div className="mx-auto max-w-7xl px-4 py-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div className="flex items-center gap-2">
+              {schedule && (
+                <button
+                  onClick={resetSchedule}
+                  className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground transition-colors mr-1"
+                  title="Back to settings"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+              )}
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground text-sm font-bold">
                 E
               </div>
@@ -104,24 +116,31 @@ const Index: React.FC = () => {
             <SchedulePrompt onGenerate={generate} />
           </div>
         ) : (
-          <div className="flex flex-col lg:flex-row gap-4">
-            {/* Schedule Panel */}
-            <div className={`flex-1 min-w-0 ${mobileTab !== 'schedule' ? 'hidden lg:block' : ''}`}>
-              <StaffStatsBar stats={stats} />
-              <div className="mt-3">
-                <ScheduleList schedule={schedule} highlightDays={highlightDays} />
+          <>
+            {/* Screen view */}
+            <div className="flex flex-col lg:flex-row gap-4">
+              {/* Schedule Panel */}
+              <div className={`flex-1 min-w-0 ${mobileTab !== 'schedule' ? 'hidden lg:block' : ''}`}>
+                <StaffStatsBar stats={stats} />
+                <div className="mt-3">
+                  <ScheduleList schedule={schedule} highlightDays={highlightDays} />
+                </div>
+              </div>
+
+              {/* Chat Panel */}
+              <div className={`lg:w-96 lg:sticky lg:top-[73px] lg:h-[calc(100vh-89px)] ${mobileTab !== 'chat' ? 'hidden lg:block' : 'h-[calc(100vh-130px)]'}`}>
+                <ChatPanel
+                  messages={messages}
+                  onSend={sendMessage}
+                  disabled={!schedule}
+                  isLoading={isAiLoading}
+                />
               </div>
             </div>
 
-            {/* Chat Panel */}
-            <div className={`lg:w-96 lg:sticky lg:top-[73px] lg:h-[calc(100vh-89px)] ${mobileTab !== 'chat' ? 'hidden lg:block' : 'h-[calc(100vh-130px)]'}`}>
-              <ChatPanel
-                messages={messages}
-                onSend={sendMessage}
-                disabled={!schedule}
-              />
-            </div>
-          </div>
+            {/* Print-only table */}
+            <PrintableTable schedule={schedule} />
+          </>
         )}
       </main>
     </div>
