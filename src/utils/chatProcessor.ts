@@ -353,8 +353,19 @@ function handleMove(input: string, schedule: MonthSchedule): ChatResult {
   // Check total shifts
   const stats = getStaffStats(newSchedule);
   const s = stats.find(st => st.name === name);
-  if (member.role === 'regular' && s && s.totalShifts > 19) {
-    return { response: `⚠️ Can't move ${name} to ${targetShift} shift on ${dateStr} — that would give them ${s.totalShifts} shifts (max 19). Would you like me to suggest alternatives?` };
+  // Check that move doesn't break shift size rules
+  const newDow = getDay(newSchedule.days[dayIdx].date);
+  const isWknd = isWeekend(newSchedule.days[dayIdx].date);
+  const regularDay = newDay.dayShift.filter(n => n !== 'Tracey' && n !== 'Shariefa');
+  const maxDay = isWknd ? 4 : 3;
+  if (targetShift === 'day' && regularDay.length > maxDay) {
+    return { response: `⚠️ Day shift already has ${maxDay} regular staff on ${dateStr}. Remove someone first.` };
+  }
+  if (targetShift === 'night' && newDay.nightShift.length > 3) {
+    return { response: `⚠️ Night shift already has 3 staff on ${dateStr}. Remove someone first.` };
+  }
+  if (member.role === 'regular' && s && s.totalShifts > 22) {
+    return { response: `⚠️ Can't move ${name} to ${targetShift} shift on ${dateStr} — that would give them ${s.totalShifts} shifts. Would you like me to suggest alternatives?` };
   }
 
   return {
