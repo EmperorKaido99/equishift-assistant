@@ -15,36 +15,19 @@ function isWeekday(dayOfWeek: number): boolean {
 }
 
 /**
- * Determine shift preference for a staff member on a given day based on pattern.
- * Returns 'day' or 'night'.
+ * SHIFT RULES:
+ * - Tracey (Supervisor): Mon-Fri day only
+ * - Shariefa (Cleaner): Mon/Wed/Fri day only (additional, not counted in the 4)
+ * - Weekday day shift: 4 people total (Tracey + 3 regular)
+ * - Weekend day shift: 4 regular staff (no Tracey)
+ * - Night shift (every day): 3 regular staff (never Tracey or Shariefa)
+ * - Each person: aim for 2 off days per week
+ * - Everyone gets at least 1 weekend off per month
  */
-function getPatternShift(
-  pattern: SchedulePattern,
-  staffIndex: number,
-  dayIndex: number,
-  totalDays: number
-): 'day' | 'night' {
-  const halfStaff = Math.ceil(REGULAR_STAFF.length / 2); // 5
-  const isGroupA = staffIndex < halfStaff;
 
-  switch (pattern) {
-    case '2week': {
-      const halfMonth = Math.floor(totalDays / 2);
-      const firstHalf = dayIndex < halfMonth;
-      if (isGroupA) return firstHalf ? 'day' : 'night';
-      return firstHalf ? 'night' : 'day';
-    }
-    case '1week': {
-      const weekNum = Math.floor(dayIndex / 7);
-      const evenWeek = weekNum % 2 === 0;
-      if (isGroupA) return evenWeek ? 'day' : 'night';
-      return evenWeek ? 'night' : 'day';
-    }
-    case 'mixed':
-    default:
-      return null as any; // handled separately
-  }
-}
+const WEEKDAY_DAY_REGULAR = 3;  // + Tracey = 4 total
+const WEEKEND_DAY_REGULAR = 4;  // no Tracey
+const NIGHT_REGULAR = 3;        // always 3
 
 export function generateSchedule(year: number, month: number, options?: ScheduleOptions): MonthSchedule {
   const pattern = options?.pattern ?? 'mixed';
@@ -53,134 +36,225 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   const days: DaySchedule[] = [];
   const regularNames = REGULAR_STAFF.map(s => s.name);
 
-  // Build group membership: map each name to a group index
+  // Build group membership
   const nameToGroup: Record<string, number> = {};
   groups.forEach((group, gi) => {
     group.forEach(name => { nameToGroup[name] = gi; });
   });
 
-  // Track shifts
-  const staffShifts: Record<string, { day: number; night: number; weekend: number }> = {};
-  REGULAR_STAFF.forEach(s => {
-    staffShifts[s.name] = { day: 0, night: 0, weekend: 0 };
+  // Track cumulative stats
+  const stats: Record<string, { day: number; night: number; off: number; weekendOff: number }> = {};
+  regularNames.forEach(name => {
+    stats[name] = { day: 0, night: 0, off: 0, weekendOff: 0 };
   });
 
-  // Build day structures with supervisor/cleaner
+  // For pattern-based: split into two groups
+  let groupA: string[] = [];
+  let groupB: string[] = [];
+
+  if (pattern !== 'mixed') {
+    const ordered = reorderByGroups(regularNames, groups);
+    const half = Math.ceil(ordered.length / 2); // 5
+    ordered.forEach((name, i) => {
+      if (i < half) groupA.push(name);
+      else groupB.push(name);
+    });
+  }
+
   for (let d = 0; d < totalDays; d++) {
     const date = new Date(year, month, d + 1);
+    const dow = getDay(date);
+    const weekend = isWeekend(date);
     const dayShift: string[] = [];
     const nightShift: string[] = [];
-    const dow = getDay(date);
 
+    // Add supervisor and cleaner
     if (isWeekday(dow)) dayShift.push('Tracey');
     if (isCleanerDay(dow)) dayShift.push('Shariefa');
+
+    const dayNeeded = weekend ? WEEKEND_DAY_REGULAR : WEEKDAY_DAY_REGULAR;
+    const nightNeeded = NIGHT_REGULAR;
+    const totalNeeded = dayNeeded + nightNeeded;
+    const offCount = regularNames.length - totalNeeded;
+
+    if (pattern === 'mixed') {
+      assignMixed(regularNames, stats, dayShift, nightShift, dayNeeded, nightNeeded, offCount, weekend, d, totalDays, nameToGroup, groups);
+    } else {
+      // Determine which group prefers day vs night
+      let dayGroup: string[];
+      let nightGroup: string[];
+
+      if (pattern === '2week') {
+        const halfMonth = Math.floor(totalDays / 2);
+        if (d < halfMonth) {
+          dayGroup = groupA; nightGroup = groupB;
+        } else {
+          dayGroup = groupB; nightGroup = groupA;
+        }
+      } else { // 1week
+        const weekNum = Math.floor(d / 7);
+        if (weekNum % 2 === 0) {
+          dayGroup = groupA; nightGroup = groupB;
+        } else {
+          dayGroup = groupB; nightGroup = groupA;
+        }
+      }
+
+      assignPatternBased(dayGroup, nightGroup, stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend);
+    }
 
     days.push({ date, dayShift, nightShift });
   }
 
-  if (pattern === '2week' || pattern === '1week') {
-    // Pattern-based assignment: assign each regular staff based on pattern
-    // Reorder staff so grouped people get adjacent indices (same group = same shift)
-    const ordered = reorderByGroups(regularNames, groups);
-
-    for (let d = 0; d < totalDays; d++) {
-      const weekend = isWeekend(days[d].date);
-      ordered.forEach((name, staffIdx) => {
-        const pref = getPatternShift(pattern, staffIdx, d, totalDays);
-        if (pref === 'day') {
-          days[d].dayShift.push(name);
-          staffShifts[name].day++;
-        } else {
-          days[d].nightShift.push(name);
-          staffShifts[name].night++;
-        }
-        if (weekend) staffShifts[name].weekend++;
-      });
-    }
-  } else {
-    // Mixed: greedy balanced assignment respecting groups
-    for (let d = 0; d < totalDays; d++) {
-      const weekend = isWeekend(days[d].date);
-      const dayNeeded = 4;
-      const nightNeeded = 5;
-
-      // Sort by total shifts ascending
-      const sorted = [...regularNames].sort((a, b) => {
-        const sa = staffShifts[a], sb = staffShifts[b];
-        const totalDiff = (sa.day + sa.night) - (sb.day + sb.night);
-        if (totalDiff !== 0) return totalDiff;
-        return sa.day - sb.day;
-      });
-
-      const assignedDay = new Set<string>();
-      const assignedNight = new Set<string>();
-
-      // Assign day shift
-      for (const name of sorted) {
-        if (assignedDay.size >= dayNeeded) break;
-        if (assignedDay.has(name) || assignedNight.has(name)) continue;
-        assignedDay.add(name);
-        // Pull in grouped members to same shift
-        if (nameToGroup[name] !== undefined) {
-          const group = groups[nameToGroup[name]];
-          group.forEach(gn => {
-            if (gn !== name && !assignedDay.has(gn) && !assignedNight.has(gn)) {
-              assignedDay.add(gn);
-            }
-          });
-        }
-      }
-
-      // Assign night shift from remaining
-      for (const name of sorted) {
-        if (assignedNight.size >= nightNeeded) break;
-        if (assignedDay.has(name) || assignedNight.has(name)) continue;
-        assignedNight.add(name);
-        if (nameToGroup[name] !== undefined) {
-          const group = groups[nameToGroup[name]];
-          group.forEach(gn => {
-            if (gn !== name && !assignedDay.has(gn) && !assignedNight.has(gn)) {
-              assignedNight.add(gn);
-            }
-          });
-        }
-      }
-
-      // Any unassigned go to whichever shift is smaller
-      for (const name of regularNames) {
-        if (!assignedDay.has(name) && !assignedNight.has(name)) {
-          if (assignedDay.size <= assignedNight.size) {
-            assignedDay.add(name);
-          } else {
-            assignedNight.add(name);
-          }
-        }
-      }
-
-      assignedDay.forEach(name => {
-        days[d].dayShift.push(name);
-        staffShifts[name].day++;
-        if (weekend) staffShifts[name].weekend++;
-      });
-      assignedNight.forEach(name => {
-        days[d].nightShift.push(name);
-        staffShifts[name].night++;
-        if (weekend) staffShifts[name].weekend++;
-      });
-    }
-  }
+  // Post-process: ensure everyone has at least 1 weekend off
+  ensureWeekendOff(days, regularNames);
 
   return { year, month, days };
 }
 
-/** Reorder names so grouped members are adjacent (in first half or second half together) */
+function assignMixed(
+  regularNames: string[],
+  stats: Record<string, { day: number; night: number; off: number; weekendOff: number }>,
+  dayShift: string[],
+  nightShift: string[],
+  dayNeeded: number,
+  nightNeeded: number,
+  offCount: number,
+  weekend: boolean,
+  dayIndex: number,
+  totalDays: number,
+  nameToGroup: Record<string, number>,
+  groups: string[][],
+) {
+  const offPeople = new Set<string>();
+
+  // Priority: give weekend off to those who haven't had one yet
+  if (weekend) {
+    const needWeekendOff = regularNames
+      .filter(n => stats[n].weekendOff === 0)
+      .sort((a, b) => (stats[b].day + stats[b].night) - (stats[a].day + stats[a].night));
+    for (const name of needWeekendOff) {
+      if (offPeople.size >= offCount) break;
+      offPeople.add(name);
+    }
+  }
+
+  // Fill remaining off slots: prefer those with most total shifts
+  const byMostShifts = [...regularNames].sort(
+    (a, b) => (stats[b].day + stats[b].night) - (stats[a].day + stats[a].night)
+  );
+  for (const name of byMostShifts) {
+    if (offPeople.size >= offCount) break;
+    if (offPeople.has(name)) continue;
+    offPeople.add(name);
+  }
+
+  const working = regularNames.filter(n => !offPeople.has(n));
+
+  // Assign day/night: prefer day for those with fewest day shifts, night for fewest night
+  const sortedForDay = [...working].sort((a, b) => stats[a].day - stats[b].day);
+  const dayWorkers = sortedForDay.slice(0, dayNeeded);
+  const nightWorkers = working.filter(n => !dayWorkers.includes(n)).slice(0, nightNeeded);
+
+  dayWorkers.forEach(n => {
+    dayShift.push(n);
+    stats[n].day++;
+  });
+  nightWorkers.forEach(n => {
+    nightShift.push(n);
+    stats[n].night++;
+  });
+  offPeople.forEach(n => {
+    stats[n].off++;
+    if (weekend) stats[n].weekendOff++;
+  });
+}
+
+function assignPatternBased(
+  dayGroup: string[],
+  nightGroup: string[],
+  stats: Record<string, { day: number; night: number; off: number; weekendOff: number }>,
+  dayShift: string[],
+  nightShift: string[],
+  dayNeeded: number,
+  nightNeeded: number,
+  weekend: boolean,
+) {
+  // dayGroup (5 people) → pick dayNeeded for day shift, rest off
+  // nightGroup (5 people) → pick nightNeeded for night shift, rest off
+  const dayGroupSorted = [...dayGroup].sort((a, b) =>
+    (stats[a].day + stats[a].night) - (stats[b].day + stats[b].night)
+  );
+  const nightGroupSorted = [...nightGroup].sort((a, b) =>
+    (stats[a].day + stats[a].night) - (stats[b].day + stats[b].night)
+  );
+
+  const dayWorkers = dayGroupSorted.slice(0, dayNeeded);
+  const dayOff = dayGroupSorted.slice(dayNeeded);
+  const nightWorkers = nightGroupSorted.slice(0, nightNeeded);
+  const nightOff = nightGroupSorted.slice(nightNeeded);
+
+  dayWorkers.forEach(n => { dayShift.push(n); stats[n].day++; });
+  nightWorkers.forEach(n => { nightShift.push(n); stats[n].night++; });
+  [...dayOff, ...nightOff].forEach(n => {
+    stats[n].off++;
+    if (weekend) stats[n].weekendOff++;
+  });
+}
+
+/** Ensure everyone has at least 1 weekend off by swapping if needed */
+function ensureWeekendOff(days: DaySchedule[], regularNames: string[]) {
+  const weekendDays = days
+    .map((d, i) => ({ day: d, idx: i }))
+    .filter(d => isWeekend(d.day.date));
+
+  // Find who has zero weekend off days
+  const weekendOffCount: Record<string, number> = {};
+  regularNames.forEach(n => { weekendOffCount[n] = 0; });
+
+  weekendDays.forEach(({ day }) => {
+    const working = new Set([...day.dayShift, ...day.nightShift]);
+    regularNames.forEach(n => {
+      if (!working.has(n)) weekendOffCount[n]++;
+    });
+  });
+
+  const noWeekendOff = regularNames.filter(n => weekendOffCount[n] === 0);
+
+  for (const needsOff of noWeekendOff) {
+    // Find a weekend day where this person works, and swap with someone who has plenty of weekend offs
+    for (const { day, idx } of weekendDays) {
+      const inDay = day.dayShift.indexOf(needsOff);
+      const inNight = day.nightShift.indexOf(needsOff);
+      if (inDay === -1 && inNight === -1) continue; // already off this day (shouldn't happen)
+
+      // Find someone off this day who has many weekend offs
+      const workingThisDay = new Set([...day.dayShift, ...day.nightShift]);
+      const offThisDay = regularNames.filter(n => !workingThisDay.has(n) && weekendOffCount[n] > 1);
+      if (offThisDay.length === 0) continue;
+
+      const swapWith = offThisDay[0];
+
+      // Swap them
+      if (inDay !== -1) {
+        day.dayShift[inDay] = swapWith;
+      } else {
+        day.nightShift[inNight] = swapWith;
+      }
+      weekendOffCount[needsOff]++;
+      weekendOffCount[swapWith]--;
+      break;
+    }
+  }
+}
+
+/** Reorder names so grouped members are adjacent */
 function reorderByGroups(names: string[], groups: string[][]): string[] {
   const used = new Set<string>();
   const firstHalf: string[] = [];
   const secondHalf: string[] = [];
   const halfSize = Math.ceil(names.length / 2);
 
-  // Place groups: alternate placing whole groups into first/second half
   groups.forEach((group, i) => {
     const target = i % 2 === 0 ? firstHalf : secondHalf;
     group.forEach(name => {
@@ -191,7 +265,6 @@ function reorderByGroups(names: string[], groups: string[][]): string[] {
     });
   });
 
-  // Fill remaining
   for (const name of names) {
     if (used.has(name)) continue;
     if (firstHalf.length < halfSize) {
@@ -207,7 +280,7 @@ function reorderByGroups(names: string[], groups: string[][]): string[] {
 
 export function getStaffStats(schedule: MonthSchedule): StaffStats[] {
   const stats: Record<string, StaffStats> = {};
-  
+
   STAFF_MEMBERS.forEach(s => {
     stats[s.name] = {
       name: s.name,
