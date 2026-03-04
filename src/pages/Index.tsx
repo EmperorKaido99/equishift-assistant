@@ -6,7 +6,7 @@ import ChatPanel from '@/components/ChatPanel';
 import StaffStatsBar from '@/components/StaffStatsBar';
 import SchedulePrompt from '@/components/SchedulePrompt';
 import PrintableTable from '@/components/PrintableTable';
-import { Printer, Calendar, MessageCircle, ArrowLeft } from 'lucide-react';
+import { Printer, Calendar, MessageCircle, ArrowLeft, Palette } from 'lucide-react';
 
 const Index: React.FC = () => {
   const {
@@ -23,6 +23,13 @@ const Index: React.FC = () => {
   } = useSchedule();
 
   const [mobileTab, setMobileTab] = useState<'schedule' | 'chat'>('schedule');
+  const [printInColor, setPrintInColor] = useState(true);
+
+  const handlePrint = () => {
+    // Set a data attribute so print CSS can adapt
+    document.documentElement.setAttribute('data-print-color', printInColor ? 'true' : 'false');
+    window.print();
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -49,7 +56,7 @@ const Index: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <MonthSelector
                 year={year}
                 month={month}
@@ -57,13 +64,26 @@ const Index: React.FC = () => {
                 onMonthChange={setMonth}
               />
               {schedule && (
-                <button
-                  onClick={() => window.print()}
-                  className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground transition-colors"
-                  title="Print schedule"
-                >
-                  <Printer className="h-4 w-4" />
-                </button>
+                <>
+                  <button
+                    onClick={() => setPrintInColor(prev => !prev)}
+                    className={`rounded-lg border p-2 transition-colors ${
+                      printInColor
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-border text-muted-foreground hover:text-foreground'
+                    }`}
+                    title={printInColor ? 'Print in colour' : 'Print black & white'}
+                  >
+                    <Palette className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={handlePrint}
+                    className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Print schedule"
+                  >
+                    <Printer className="h-4 w-4" />
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -139,7 +159,7 @@ const Index: React.FC = () => {
             </div>
 
             {/* Print-only table */}
-            <PrintableTable schedule={schedule} />
+            <PrintableTable schedule={schedule} colorMode={printInColor} />
           </>
         )}
       </main>

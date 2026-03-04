@@ -1,12 +1,13 @@
 import React from 'react';
-import { MonthSchedule, STAFF_MEMBERS } from '@/types/schedule';
+import { MonthSchedule, STAFF_MEMBERS, STAFF_COLORS } from '@/types/schedule';
 import { format, isWeekend } from 'date-fns';
 
 interface PrintableTableProps {
   schedule: MonthSchedule;
+  colorMode: boolean;
 }
 
-const PrintableTable: React.FC<PrintableTableProps> = ({ schedule }) => {
+const PrintableTable: React.FC<PrintableTableProps> = ({ schedule, colorMode }) => {
   const staffNames = STAFF_MEMBERS.map(s => s.name);
 
   const getCellValue = (dayIndex: number, name: string): string => {
@@ -29,7 +30,11 @@ const PrintableTable: React.FC<PrintableTableProps> = ({ schedule }) => {
             <th className="border border-gray-400 px-1 py-0.5 bg-gray-200 text-left">Date</th>
             <th className="border border-gray-400 px-1 py-0.5 bg-gray-200 text-left">Day</th>
             {staffNames.map(name => (
-              <th key={name} className="border border-gray-400 px-1 py-0.5 bg-gray-200 text-center whitespace-nowrap">
+              <th
+                key={name}
+                className="border border-gray-400 px-1 py-0.5 bg-gray-200 text-center whitespace-nowrap"
+                style={colorMode ? { color: STAFF_COLORS[name] } : undefined}
+              >
                 {name}
               </th>
             ))}
@@ -48,12 +53,29 @@ const PrintableTable: React.FC<PrintableTableProps> = ({ schedule }) => {
                 </td>
                 {staffNames.map(name => {
                   const val = getCellValue(idx, name);
-                  let cellClass = 'border border-gray-400 px-1 py-0.5 text-center font-medium ';
-                  if (val === 'DAY') cellClass += 'bg-blue-50';
-                  else if (val === 'NIGHT') cellClass += 'bg-gray-200';
-                  else cellClass += '';
+                  const isOff = val === 'OFF';
+                  const bgColor = colorMode
+                    ? isOff
+                      ? '#fee2e2'
+                      : val === 'DAY'
+                        ? '#dbeafe'
+                        : '#e0e7ff'
+                    : undefined;
+                  const textColor = colorMode
+                    ? isOff
+                      ? '#dc2626'
+                      : STAFF_COLORS[name]
+                    : undefined;
+
                   return (
-                    <td key={name} className={cellClass}>
+                    <td
+                      key={name}
+                      className="border border-gray-400 px-1 py-0.5 text-center font-medium"
+                      style={{
+                        backgroundColor: bgColor,
+                        color: textColor,
+                      }}
+                    >
                       {val}
                     </td>
                   );
