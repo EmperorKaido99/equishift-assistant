@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { ScheduleOptions, SchedulePattern, REGULAR_STAFF } from '@/types/schedule';
+import { ScheduleOptions, SchedulePattern, REGULAR_STAFF, StaffLeave } from '@/types/schedule';
 import { Shuffle, ArrowRightLeft, Users, Zap } from 'lucide-react';
+import LeaveManager from './LeaveManager';
 
 interface SchedulePromptProps {
-  onGenerate: (options: ScheduleOptions) => void;
+  onGenerate: (options: ScheduleOptions, leaves: StaffLeave[]) => void;
 }
 
 const PATTERNS: { value: SchedulePattern; label: string; desc: string; icon: React.ReactNode }[] = [
@@ -17,6 +18,7 @@ const SchedulePrompt: React.FC<SchedulePromptProps> = ({ onGenerate }) => {
   const [showGrouping, setShowGrouping] = useState(false);
   const [groupInput, setGroupInput] = useState('');
   const [groups, setGroups] = useState<string[][]>([]);
+  const [leaves, setLeaves] = useState<StaffLeave[]>([]);
 
   const regularNames = REGULAR_STAFF.map(s => s.name);
 
@@ -41,11 +43,11 @@ const SchedulePrompt: React.FC<SchedulePromptProps> = ({ onGenerate }) => {
     onGenerate({
       pattern,
       groupTogether: groups.length > 0 ? groups : undefined,
-    });
+    }, leaves);
   };
 
   return (
-    <div className="mx-auto max-w-2xl animate-fade-in">
+    <div className="mx-auto max-w-2xl animate-fade-in space-y-4">
       <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
         <h2 className="text-lg font-bold text-foreground mb-1">Schedule Settings</h2>
         <p className="text-sm text-muted-foreground mb-5">Choose a shift pattern before generating</p>
@@ -130,6 +132,13 @@ const SchedulePrompt: React.FC<SchedulePromptProps> = ({ onGenerate }) => {
           Generate Schedule
         </button>
       </div>
+
+      {/* Leave Management */}
+      <LeaveManager
+        leaves={leaves}
+        onAddLeave={l => setLeaves(prev => [...prev, l])}
+        onRemoveLeave={i => setLeaves(prev => prev.filter((_, idx) => idx !== i))}
+      />
     </div>
   );
 };

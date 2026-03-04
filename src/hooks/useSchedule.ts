@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { MonthSchedule, ChatMessage, ScheduleOptions } from '@/types/schedule';
+import { MonthSchedule, ChatMessage, ScheduleOptions, StaffLeave } from '@/types/schedule';
 import { generateSchedule, getStaffStats } from '@/utils/scheduleGenerator';
 import { processChat } from '@/utils/chatProcessor';
 import { streamChat, parseAction, stripAction } from '@/utils/aiChat';
@@ -116,8 +116,8 @@ export function useSchedule() {
     saveChat(messages);
   }, [messages]);
 
-  const generate = useCallback((options?: ScheduleOptions) => {
-    const newSchedule = generateSchedule(year, month, options);
+  const generate = useCallback((options?: ScheduleOptions, leaves?: StaffLeave[]) => {
+    const newSchedule = generateSchedule(year, month, options, leaves);
     setSchedule(newSchedule);
     historyRef.current = [];
     setHighlightDays([]);
@@ -131,6 +131,31 @@ export function useSchedule() {
     };
     setMessages([msg]);
   }, [year, month]);
+
+  const swapStaff = useCallback((dayIndex: number, nameA: string, shiftA: 'day' | 'night', nameB: string, shiftB: 'day' | 'night') => {
+    if (!schedule) return;
+    const newSchedule = cloneSchedule(schedule);
+    const day = newSchedule.days[dayIndex];
+    if (!day) return;
+
+    const arrA = shiftA === 'day' ? day.dayShift : day.nightShift;
+    const arrB = shiftB === 'day' ? day.dayShift : day.nightShift;
+    const idxA = arrA.indexOf(nameA);
+    const idxB = arrB.indexOf(nameB);
+
+    if (shiftA === shiftB) {
+      if (idxA !== -1) arrA[idxA] = nameB;
+      if (idxB !== -1) arrB[idxB] = nameA;
+    } else {
+      if (idxA !== -1) arrA[idxA] = nameB;
+      if (idxB !== -1) arrB[idxB] = nameA;
+    }
+
+    historyRef.current.push(schedule);
+    setSchedule(newSchedule);
+    setHighlightDays([dayIndex]);
+    setTimeout(() => setHighlightDays([]), 2000);
+  }, [schedule]);
 
   const resetSchedule = useCallback(() => {
     setSchedule(null);
@@ -240,5 +265,6 @@ export function useSchedule() {
     generate,
     sendMessage,
     resetSchedule,
+    swapStaff,
   };
 }

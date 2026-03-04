@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useSchedule } from '@/hooks/useSchedule';
 import MonthSelector from '@/components/MonthSelector';
-import ScheduleList from '@/components/ScheduleList';
+import DraggableScheduleList from '@/components/DraggableScheduleList';
 import ChatPanel from '@/components/ChatPanel';
 import StaffStatsBar from '@/components/StaffStatsBar';
+import StaffLegend from '@/components/StaffLegend';
 import SchedulePrompt from '@/components/SchedulePrompt';
 import PrintableTable from '@/components/PrintableTable';
 import { Printer, Calendar, MessageCircle, ArrowLeft, Palette } from 'lucide-react';
@@ -20,13 +21,13 @@ const Index: React.FC = () => {
     generate,
     sendMessage,
     resetSchedule,
+    swapStaff,
   } = useSchedule();
 
   const [mobileTab, setMobileTab] = useState<'schedule' | 'chat'>('schedule');
   const [printInColor, setPrintInColor] = useState(true);
 
   const handlePrint = () => {
-    // Set a data attribute so print CSS can adapt
     document.documentElement.setAttribute('data-print-color', printInColor ? 'true' : 'false');
     window.print();
   };
@@ -141,9 +142,18 @@ const Index: React.FC = () => {
             <div className="flex flex-col lg:flex-row gap-4">
               {/* Schedule Panel */}
               <div className={`flex-1 min-w-0 ${mobileTab !== 'schedule' ? 'hidden lg:block' : ''}`}>
-                <StaffStatsBar stats={stats} />
+                <StaffLegend />
                 <div className="mt-3">
-                  <ScheduleList schedule={schedule} highlightDays={highlightDays} />
+                  <StaffStatsBar stats={stats} />
+                </div>
+                <div className="mt-3">
+                  <DraggableScheduleList
+                    schedule={schedule}
+                    highlightDays={highlightDays}
+                    onSwap={(dayIndex, nameA, shiftA, nameB, shiftB) => {
+                      swapStaff(dayIndex, nameA, shiftA, nameB, shiftB);
+                    }}
+                  />
                 </div>
               </div>
 
