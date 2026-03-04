@@ -1,4 +1,4 @@
-import { DaySchedule, MonthSchedule, REGULAR_STAFF, StaffStats, STAFF_MEMBERS, ScheduleOptions, SchedulePattern } from '@/types/schedule';
+import { DaySchedule, MonthSchedule, REGULAR_STAFF, StaffStats, STAFF_MEMBERS, ScheduleOptions, SchedulePattern, StaffLeave } from '@/types/schedule';
 import {
   getDaysInMonth,
   getDay,
@@ -29,12 +29,19 @@ const WEEKDAY_DAY_REGULAR = 3;  // + Tracey = 4 total
 const WEEKEND_DAY_REGULAR = 4;  // no Tracey
 const NIGHT_REGULAR = 3;        // always 3
 
-export function generateSchedule(year: number, month: number, options?: ScheduleOptions): MonthSchedule {
+export function generateSchedule(year: number, month: number, options?: ScheduleOptions, leaves?: StaffLeave[]): MonthSchedule {
   const pattern = options?.pattern ?? 'mixed';
   const groups = options?.groupTogether ?? [];
   const totalDays = getDaysInMonth(new Date(year, month));
   const days: DaySchedule[] = [];
   const regularNames = REGULAR_STAFF.map(s => s.name);
+
+  // Build leave lookup: date string -> set of unavailable names
+  const leaveLookup: Record<string, Set<string>> = {};
+  (leaves ?? []).forEach(l => {
+    if (!leaveLookup[l.date]) leaveLookup[l.date] = new Set();
+    leaveLookup[l.date].add(l.staffName);
+  });
 
   // Build group membership
   const nameToGroup: Record<string, number> = {};
@@ -63,22 +70,27 @@ export function generateSchedule(year: number, month: number, options?: Schedule
 
   for (let d = 0; d < totalDays; d++) {
     const date = new Date(year, month, d + 1);
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d + 1).padStart(2, '0')}`;
     const dow = getDay(date);
     const weekend = isWeekend(date);
     const dayShift: string[] = [];
     const nightShift: string[] = [];
 
-    // Add supervisor and cleaner
-    if (isWeekday(dow)) dayShift.push('Tracey');
-    if (isCleanerDay(dow)) dayShift.push('Shariefa');
+    // Filter out unavailable staff for this day
+    const unavailable = leaveLookup[dateStr] ?? new Set<string>();
+    const availableRegular = regularNames.filter(n => !unavailable.has(n));
+
+    // Add supervisor and cleaner (if not on leave)
+    if (isWeekday(dow) && !unavailable.has('Tracey')) dayShift.push('Tracey');
+    if (isCleanerDay(dow) && !unavailable.has('Shariefa')) dayShift.push('Shariefa');
 
     const dayNeeded = weekend ? WEEKEND_DAY_REGULAR : WEEKDAY_DAY_REGULAR;
     const nightNeeded = NIGHT_REGULAR;
-    const totalNeeded = dayNeeded + nightNeeded;
-    const offCount = regularNames.length - totalNeeded;
+    const totalNeeded = Math.min(dayNeeded + nightNeeded, availableRegular.length);
+    const offCount = availableRegular.length - totalNeeded;
 
     if (pattern === 'mixed') {
-      assignMixed(regularNames, stats, dayShift, nightShift, dayNeeded, nightNeeded, offCount, weekend, d, totalDays, nameToGroup, groups);
+      assignMixed(availableRegular, stats, dayShift, nightShift, dayNeeded, nightNeeded, offCount, weekend, d, totalDays, nameToGroup, groups);
     } else {
       // Determine which group prefers day vs night
       let dayGroup: string[];
@@ -100,7 +112,7 @@ export function generateSchedule(year: number, month: number, options?: Schedule
         }
       }
 
-      assignPatternBased(dayGroup, nightGroup, stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend);
+      assignPatternBased(dayGroup.filter(n => availableRegular.includes(n)), nightGroup.filter(n => availableRegular.includes(n)), stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend);
     }
 
     days.push({ date, dayShift, nightShift });
