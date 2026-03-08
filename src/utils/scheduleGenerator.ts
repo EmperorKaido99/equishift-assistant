@@ -72,12 +72,13 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   }
 
   // For 2-2-2: build rotation slots (cycle length = 6)
-  // With 10 staff, we create staggered start offsets
+  // With 10 staff, use offsets that produce ~4 day, ~3 night, ~3 off each day
+  // Offsets: [0,0,1,1,2,2,3,4,4,5] give best daily coverage
   const rotationOffsets: Record<string, number> = {};
   if (pattern === '2day2night2off') {
+    const offsets = [0, 0, 1, 1, 2, 2, 3, 4, 4, 5];
     regularNames.forEach((name, i) => {
-      // Spread across all 6 phases evenly
-      rotationOffsets[name] = i % 6;
+      rotationOffsets[name] = offsets[i % offsets.length];
     });
   }
 
