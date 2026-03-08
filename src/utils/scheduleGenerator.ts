@@ -72,12 +72,20 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   }
 
   // For 2-2-2: build rotation slots (cycle length = 6)
-  // With 10 staff, we create staggered start offsets
-  const rotationOffsets: Record<string, number> = {};
+  // For 2-2-2: track each person's cycle state
+  // State tracks consecutive count of current assignment type
+  const cycleState: Record<string, { type: 'D' | 'N' | 'O'; count: number }> = {};
   if (pattern === '2day2night2off') {
+    // Stagger initial states so not everyone starts the same
+    const initialStates: { type: 'D' | 'N' | 'O'; count: number }[] = [
+      { type: 'D', count: 0 }, { type: 'D', count: 1 },
+      { type: 'N', count: 0 }, { type: 'N', count: 1 },
+      { type: 'O', count: 0 }, { type: 'O', count: 1 },
+      { type: 'D', count: 0 }, { type: 'D', count: 1 },
+      { type: 'N', count: 0 }, { type: 'N', count: 1 },
+    ];
     regularNames.forEach((name, i) => {
-      // Spread across all 6 phases evenly
-      rotationOffsets[name] = i % 6;
+      cycleState[name] = { ...initialStates[i % initialStates.length] };
     });
   }
 
@@ -105,7 +113,7 @@ export function generateSchedule(year: number, month: number, options?: Schedule
     if (pattern === 'mixed') {
       assignMixed(availableRegular, stats, dayShift, nightShift, dayNeeded, nightNeeded, offCount, weekend, d, totalDays, nameToGroup, groups, previousNightWorkers);
     } else if (pattern === '2day2night2off') {
-      assign222Cycle(availableRegular, regularNames, rotationOffsets, stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend, d, previousNightWorkers);
+      assign222Cycle(availableRegular, regularNames, cycleState, stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend, d, previousNightWorkers);
     } else {
       let dayGroup: string[];
       let nightGroup: string[];
@@ -135,10 +143,11 @@ export function generateSchedule(year: number, month: number, options?: Schedule
     days.push({ date, dayShift, nightShift });
   }
 
-  // Post-process: ensure everyone has at least 1 weekend off
-  ensureWeekendOff(days, regularNames);
-  // Post-process: fix any night→day violations from weekend-off swaps
-  fixNightToDayViolations(days, regularNames);
+  // Post-process: skip for 2-2-2 cycle as it handles its own balance
+  if (pattern !== '2day2night2off') {
+    ensureWeekendOff(days, regularNames);
+    fixNightToDayViolations(days, regularNames);
+  }
 
   return { year, month, days };
 }
@@ -234,7 +243,7 @@ function assignMixed(
 function assign222Cycle(
   availableRegular: string[],
   allRegular: string[],
-  rotationOffsets: Record<string, number>,
+  cycleState: Record<string, { type: 'D' | 'N' | 'O'; count: number }>,
   stats: Record<string, { day: number; night: number; off: number; weekendOff: number }>,
   dayShift: string[],
   nightShift: string[],
@@ -244,86 +253,108 @@ function assign222Cycle(
   dayIndex: number,
   previousNightWorkers: Set<string>,
 ) {
-  // CYCLE-FIRST approach: follow the 2-2-2 pattern strictly for consecutive offs,
-  // then make minimal adjustments to hit required day/night counts.
-
   const mustNotDay = new Set(availableRegular.filter(n => previousNightWorkers.has(n)));
   const totalShifts = (n: string) => stats[n].day + stats[n].night;
 
-  // Step 1: Determine each person's cycle phase
-  // 0-1 = day, 2-3 = night, 4-5 = off
-  const cycleDay: string[] = [];
-  const cycleNight: string[] = [];
-  const cycleOff: string[] = [];
-
-  for (const name of availableRegular) {
-    const phase = (dayIndex + rotationOffsets[name]) % 6;
-    if (phase < 2) cycleDay.push(name);
-    else if (phase < 4) cycleNight.push(name);
-    else cycleOff.push(name);
+  // Determine what each person WANTS to do based on their cycle state
+  // 2-2-2 pattern: after 2 of one type, transition to next (D→N→O→D)
+  function getIdeal(name: string): 'D' | 'N' | 'O' {
+    const state = cycleState[name];
+    if (!state) return 'D';
+    if (state.count >= 2) {
+      // Transition: D→N, N→O, O→D
+      if (state.type === 'D') return 'N';
+      if (state.type === 'N') return 'O';
+      return 'D';
+    }
+    return state.type; // Continue current type
   }
 
-  // Step 2: Enforce night→day constraint — move violators from day to night
-  const constrainedFromDay = cycleDay.filter(n => mustNotDay.has(n));
-  let adjustedDay = cycleDay.filter(n => !mustNotDay.has(n));
-  let adjustedNight = [...cycleNight, ...constrainedFromDay];
-  let adjustedOff = [...cycleOff];
+  // Score for wanting off (higher = more wants off)
+  function offPriority(name: string): number {
+    const ideal = getIdeal(name);
+    if (ideal === 'O') return 100; // Strongly wants off
+    const state = cycleState[name];
+    // If they had 1 off yesterday, they REALLY need off today for consecutive pair
+    if (state?.type === 'O' && state.count === 1) return 200;
+    return 0;
+  }
 
-  // Step 3: Balance counts to match dayNeeded / nightNeeded
-  // Too many day workers → move extras to night or off (prefer those with most shifts)
+  // Sort by off priority descending — those who need off most get it
+  const totalNeeded = dayNeeded + nightNeeded;
+  const offCount = Math.max(0, availableRegular.length - totalNeeded);
+  
+  const sortedForOff = [...availableRegular].sort((a, b) => {
+    const aPri = offPriority(a);
+    const bPri = offPriority(b);
+    if (aPri !== bPri) return bPri - aPri; // Higher priority = more wants off
+    return totalShifts(b) - totalShifts(a); // Tiebreak: most shifts gets off
+  });
+
+  const offPeople = new Set(sortedForOff.slice(0, offCount));
+  const workers = availableRegular.filter(n => !offPeople.has(n));
+
+  // Assign workers to day or night based on their ideal
+  // Workers who want D → day, want N → night, want O (but forced to work) → fewest shifts type
+  const wantsDay = workers.filter(n => getIdeal(n) === 'D' && !mustNotDay.has(n));
+  const wantsNight = workers.filter(n => getIdeal(n) === 'N' || mustNotDay.has(n));
+  const wantsOff = workers.filter(n => getIdeal(n) === 'O' && !mustNotDay.has(n) && !wantsNight.includes(n));
+
+  let adjustedDay = [...wantsDay];
+  let adjustedNight = [...wantsNight];
+  let flex = [...wantsOff]; // These wanted off but have to work
+
+  // Add flex workers to whichever pool needs more
+  flex.sort((a, b) => totalShifts(a) - totalShifts(b));
+  for (const n of flex) {
+    if (adjustedDay.length < dayNeeded && !mustNotDay.has(n)) adjustedDay.push(n);
+    else adjustedNight.push(n);
+  }
+
+  // Balance day pool
   while (adjustedDay.length > dayNeeded) {
     const sorted = [...adjustedDay].sort((a, b) => totalShifts(b) - totalShifts(a));
-    const removed = sorted[0];
-    adjustedDay = adjustedDay.filter(n => n !== removed);
-    if (adjustedNight.length < nightNeeded) {
-      adjustedNight.push(removed);
-    } else {
-      adjustedOff.push(removed);
-    }
+    adjustedDay = adjustedDay.filter(n => n !== sorted[0]);
+    adjustedNight.push(sorted[0]);
   }
-
-  // Too few day workers → pull from night (prefer fewest shifts), then off
-  while (adjustedDay.length < dayNeeded) {
-    // Try night pool first (those not constrained)
-    const nightCandidates = adjustedNight.filter(n => !mustNotDay.has(n))
+  while (adjustedDay.length < dayNeeded && adjustedNight.length > nightNeeded) {
+    const candidates = adjustedNight.filter(n => !mustNotDay.has(n))
       .sort((a, b) => totalShifts(a) - totalShifts(b));
-    if (nightCandidates.length > 0 && adjustedNight.length > nightNeeded) {
-      const picked = nightCandidates[0];
-      adjustedNight = adjustedNight.filter(n => n !== picked);
-      adjustedDay.push(picked);
-    } else {
-      // Pull from off (fewest shifts, not constrained)
-      const offCandidates = adjustedOff.filter(n => !mustNotDay.has(n))
-        .sort((a, b) => totalShifts(a) - totalShifts(b));
-      if (offCandidates.length > 0) {
-        const picked = offCandidates[0];
-        adjustedOff = adjustedOff.filter(n => n !== picked);
-        adjustedDay.push(picked);
-      } else break;
-    }
+    if (candidates.length === 0) break;
+    adjustedNight = adjustedNight.filter(n => n !== candidates[0]);
+    adjustedDay.push(candidates[0]);
   }
 
-  // Too many night workers → move extras to off
+  // Balance night pool
   while (adjustedNight.length > nightNeeded) {
     const sorted = [...adjustedNight].sort((a, b) => totalShifts(b) - totalShifts(a));
-    const removed = sorted[0];
-    adjustedNight = adjustedNight.filter(n => n !== removed);
-    adjustedOff.push(removed);
+    adjustedNight = adjustedNight.filter(n => n !== sorted[0]);
+    // This person becomes extra off
+    offPeople.add(sorted[0]);
   }
 
-  // Too few night workers → pull from off
-  while (adjustedNight.length < nightNeeded) {
-    const offCandidates = [...adjustedOff].sort((a, b) => totalShifts(a) - totalShifts(b));
-    if (offCandidates.length > 0) {
-      const picked = offCandidates[0];
-      adjustedOff = adjustedOff.filter(n => n !== picked);
-      adjustedNight.push(picked);
-    } else break;
+  // Update cycle states
+  const finalDay = new Set(adjustedDay);
+  const finalNight = new Set(adjustedNight);
+
+  for (const name of availableRegular) {
+    let assigned: 'D' | 'N' | 'O';
+    if (finalDay.has(name)) assigned = 'D';
+    else if (finalNight.has(name)) assigned = 'N';
+    else assigned = 'O';
+
+    const state = cycleState[name];
+    if (state.type === assigned) {
+      state.count++;
+    } else {
+      state.type = assigned;
+      state.count = 1;
+    }
   }
 
   adjustedDay.forEach(n => { dayShift.push(n); stats[n].day++; });
   adjustedNight.forEach(n => { nightShift.push(n); stats[n].night++; });
-  adjustedOff.forEach(n => {
+  availableRegular.filter(n => offPeople.has(n)).forEach(n => {
     stats[n].off++;
     if (weekend) stats[n].weekendOff++;
   });
