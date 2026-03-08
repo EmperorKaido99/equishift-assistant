@@ -104,6 +104,8 @@ export function generateSchedule(year: number, month: number, options?: Schedule
 
     if (pattern === 'mixed') {
       assignMixed(availableRegular, stats, dayShift, nightShift, dayNeeded, nightNeeded, offCount, weekend, d, totalDays, nameToGroup, groups, previousNightWorkers);
+    } else if (pattern === '2day2night2off') {
+      assign222Cycle(availableRegular, regularNames, rotationOffsets, stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend, d, previousNightWorkers);
     } else {
       let dayGroup: string[];
       let nightGroup: string[];
