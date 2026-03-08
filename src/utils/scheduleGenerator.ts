@@ -55,13 +55,16 @@ export function generateSchedule(year: number, month: number, options?: Schedule
     stats[name] = { day: 0, night: 0, off: 0, weekendOff: 0 };
   });
 
+  // Track who worked night shift on the previous day
+  let previousNightWorkers = new Set<string>();
+
   // For pattern-based: split into two groups
   let groupA: string[] = [];
   let groupB: string[] = [];
 
   if (pattern !== 'mixed') {
     const ordered = reorderByGroups(regularNames, groups);
-    const half = Math.ceil(ordered.length / 2); // 5
+    const half = Math.ceil(ordered.length / 2);
     ordered.forEach((name, i) => {
       if (i < half) groupA.push(name);
       else groupB.push(name);
@@ -90,9 +93,8 @@ export function generateSchedule(year: number, month: number, options?: Schedule
     const offCount = availableRegular.length - totalNeeded;
 
     if (pattern === 'mixed') {
-      assignMixed(availableRegular, stats, dayShift, nightShift, dayNeeded, nightNeeded, offCount, weekend, d, totalDays, nameToGroup, groups);
+      assignMixed(availableRegular, stats, dayShift, nightShift, dayNeeded, nightNeeded, offCount, weekend, d, totalDays, nameToGroup, groups, previousNightWorkers);
     } else {
-      // Determine which group prefers day vs night
       let dayGroup: string[];
       let nightGroup: string[];
 
@@ -103,7 +105,7 @@ export function generateSchedule(year: number, month: number, options?: Schedule
         } else {
           dayGroup = groupB; nightGroup = groupA;
         }
-      } else { // 1week
+      } else {
         const weekNum = Math.floor(d / 7);
         if (weekNum % 2 === 0) {
           dayGroup = groupA; nightGroup = groupB;
@@ -112,14 +114,19 @@ export function generateSchedule(year: number, month: number, options?: Schedule
         }
       }
 
-      assignPatternBased(dayGroup.filter(n => availableRegular.includes(n)), nightGroup.filter(n => availableRegular.includes(n)), stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend);
+      assignPatternBased(dayGroup.filter(n => availableRegular.includes(n)), nightGroup.filter(n => availableRegular.includes(n)), stats, dayShift, nightShift, dayNeeded, nightNeeded, weekend, previousNightWorkers);
     }
+
+    // Update previous night workers for next day's constraint
+    previousNightWorkers = new Set(nightShift.filter(n => regularNames.includes(n)));
 
     days.push({ date, dayShift, nightShift });
   }
 
   // Post-process: ensure everyone has at least 1 weekend off
   ensureWeekendOff(days, regularNames);
+  // Post-process: fix any night→day violations from weekend-off swaps
+  fixNightToDayViolations(days, regularNames);
 
   return { year, month, days };
 }
