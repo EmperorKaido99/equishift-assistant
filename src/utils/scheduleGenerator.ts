@@ -328,6 +328,7 @@ function assign222Cycle(
     if (weekend) stats[n].weekendOff++;
   });
 }
+function assignPatternBased(
   dayGroup: string[],
   nightGroup: string[],
   stats: Record<string, { day: number; night: number; off: number; weekendOff: number }>,
