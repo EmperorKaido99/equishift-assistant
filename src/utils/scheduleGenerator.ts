@@ -62,12 +62,22 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   let groupA: string[] = [];
   let groupB: string[] = [];
 
-  if (pattern !== 'mixed') {
+  if (pattern !== 'mixed' && pattern !== '2day2night2off') {
     const ordered = reorderByGroups(regularNames, groups);
     const half = Math.ceil(ordered.length / 2);
     ordered.forEach((name, i) => {
       if (i < half) groupA.push(name);
       else groupB.push(name);
+    });
+  }
+
+  // For 2-2-2: build rotation slots (cycle length = 6)
+  // With 10 staff, we create staggered start offsets
+  const rotationOffsets: Record<string, number> = {};
+  if (pattern === '2day2night2off') {
+    regularNames.forEach((name, i) => {
+      // Stagger each person by 2 days to ensure coverage
+      rotationOffsets[name] = (i * 2) % 6;
     });
   }
 
