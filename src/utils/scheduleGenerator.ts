@@ -231,6 +231,76 @@ function assignMixed(
   });
 }
 
+function assign222Cycle(
+  availableRegular: string[],
+  allRegular: string[],
+  rotationOffsets: Record<string, number>,
+  stats: Record<string, { day: number; night: number; off: number; weekendOff: number }>,
+  dayShift: string[],
+  nightShift: string[],
+  dayNeeded: number,
+  nightNeeded: number,
+  weekend: boolean,
+  dayIndex: number,
+  previousNightWorkers: Set<string>,
+) {
+  // Each person's phase in the 6-day cycle: 0-1 = day, 2-3 = night, 4-5 = off
+  const idealDay: string[] = [];
+  const idealNight: string[] = [];
+  const idealOff: string[] = [];
+
+  for (const name of availableRegular) {
+    const phase = (dayIndex + rotationOffsets[name]) % 6;
+    if (phase < 2) idealDay.push(name);
+    else if (phase < 4) idealNight.push(name);
+    else idealOff.push(name);
+  }
+
+  // Enforce night→day constraint: anyone who worked night yesterday cannot do day
+  const mustNotDay = new Set(availableRegular.filter(n => previousNightWorkers.has(n)));
+  const forcedFromDay = idealDay.filter(n => mustNotDay.has(n));
+
+  // Move constrained people from day to night pool
+  const adjustedDay = idealDay.filter(n => !mustNotDay.has(n));
+  const adjustedNight = [...idealNight, ...forcedFromDay];
+
+  // Sort by fewest shifts for fairness
+  const sortedDay = [...adjustedDay].sort((a, b) => stats[a].day - stats[b].day);
+  const sortedNight = [...adjustedNight].sort((a, b) => stats[a].night - stats[b].night);
+
+  const dayWorkers = sortedDay.slice(0, dayNeeded);
+  const nightWorkers = sortedNight.slice(0, nightNeeded);
+  const assigned = new Set([...dayWorkers, ...nightWorkers]);
+
+  // Everyone else is off
+  const offWorkers = availableRegular.filter(n => !assigned.has(n));
+
+  // If not enough day/night workers, pull from off pool
+  if (dayWorkers.length < dayNeeded) {
+    const extra = offWorkers.filter(n => !mustNotDay.has(n)).sort((a, b) => stats[a].day - stats[b].day);
+    while (dayWorkers.length < dayNeeded && extra.length > 0) {
+      const n = extra.shift()!;
+      dayWorkers.push(n);
+      assigned.add(n);
+    }
+  }
+  if (nightWorkers.length < nightNeeded) {
+    const extra = offWorkers.filter(n => !assigned.has(n)).sort((a, b) => stats[a].night - stats[b].night);
+    while (nightWorkers.length < nightNeeded && extra.length > 0) {
+      const n = extra.shift()!;
+      nightWorkers.push(n);
+      assigned.add(n);
+    }
+  }
+
+  dayWorkers.forEach(n => { dayShift.push(n); stats[n].day++; });
+  nightWorkers.forEach(n => { nightShift.push(n); stats[n].night++; });
+  availableRegular.filter(n => !assigned.has(n)).forEach(n => {
+    stats[n].off++;
+    if (weekend) stats[n].weekendOff++;
+  });
+}
+
 function assignPatternBased(
   dayGroup: string[],
   nightGroup: string[],
