@@ -136,10 +136,11 @@ export function generateSchedule(year: number, month: number, options?: Schedule
     days.push({ date, dayShift, nightShift });
   }
 
-  // Post-process: ensure everyone has at least 1 weekend off
-  ensureWeekendOff(days, regularNames);
-  // Post-process: fix any night→day violations from weekend-off swaps
-  fixNightToDayViolations(days, regularNames);
+  // Post-process: skip for 2-2-2 cycle as it handles its own balance
+  if (pattern !== '2day2night2off') {
+    ensureWeekendOff(days, regularNames);
+    fixNightToDayViolations(days, regularNames);
+  }
 
   return { year, month, days };
 }
