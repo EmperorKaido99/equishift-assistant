@@ -7,7 +7,8 @@ import StaffStatsBar from '@/components/StaffStatsBar';
 import StaffLegend from '@/components/StaffLegend';
 import SchedulePrompt from '@/components/SchedulePrompt';
 import PrintableTable from '@/components/PrintableTable';
-import { Printer, Calendar, MessageCircle, ArrowLeft, Palette } from 'lucide-react';
+import { Printer, Calendar, MessageCircle, ArrowLeft, Palette, FileSpreadsheet } from 'lucide-react';
+import { exportToExcel } from '@/utils/excelExport';
 
 const Index: React.FC = () => {
   const {
