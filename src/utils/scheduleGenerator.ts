@@ -246,72 +246,93 @@ function assign222Cycle(
   previousNightWorkers: Set<string>,
 ) {
   // CYCLE-FIRST approach: follow the 2-2-2 pattern strictly.
-  // RULE: NEVER pull from off phase to preserve consecutive off days.
-  // Only redistribute between day and night; excess goes to off.
+  // Prefer keeping off phase intact; only pull from off as last resort
+  // (prefer phase 4 = first off day, to keep phase 5 = second off day intact).
 
   const mustNotDay = new Set(availableRegular.filter(n => previousNightWorkers.has(n)));
   const totalShifts = (n: string) => stats[n].day + stats[n].night;
 
   // Step 1: Determine each person's cycle phase
-  // 0-1 = day, 2-3 = night, 4-5 = off
+  const personPhase: Record<string, number> = {};
   const cycleDay: string[] = [];
   const cycleNight: string[] = [];
   const cycleOff: string[] = [];
 
   for (const name of availableRegular) {
     const phase = (dayIndex + rotationOffsets[name]) % 6;
+    personPhase[name] = phase;
     if (phase < 2) cycleDay.push(name);
     else if (phase < 4) cycleNight.push(name);
     else cycleOff.push(name);
   }
 
-  // Step 2: Enforce night→day constraint — move violators from day to night
+  // Step 2: Enforce night→day constraint
   const constrainedFromDay = cycleDay.filter(n => mustNotDay.has(n));
   let adjustedDay = cycleDay.filter(n => !mustNotDay.has(n));
   let adjustedNight = [...cycleNight, ...constrainedFromDay];
+  let adjustedOff = [...cycleOff];
 
-  // Step 3: Balance day/night counts — NEVER touch off
-  // Too many day → move excess to night (if needed) or off
+  // Step 3: Balance — redistribute between day/night first
   while (adjustedDay.length > dayNeeded) {
     const sorted = [...adjustedDay].sort((a, b) => totalShifts(b) - totalShifts(a));
     const removed = sorted[0];
     adjustedDay = adjustedDay.filter(n => n !== removed);
-    if (adjustedNight.length < nightNeeded) {
-      adjustedNight.push(removed);
-    } else {
-      cycleOff.push(removed); // gets extra off — acceptable
-    }
+    if (adjustedNight.length < nightNeeded) adjustedNight.push(removed);
+    else adjustedOff.push(removed);
   }
 
-  // Too few day → pull ONLY from excess night (never from off)
   while (adjustedDay.length < dayNeeded && adjustedNight.length > nightNeeded) {
     const candidates = adjustedNight.filter(n => !mustNotDay.has(n))
       .sort((a, b) => totalShifts(a) - totalShifts(b));
     if (candidates.length === 0) break;
-    const picked = candidates[0];
-    adjustedNight = adjustedNight.filter(n => n !== picked);
-    adjustedDay.push(picked);
+    adjustedNight = adjustedNight.filter(n => n !== candidates[0]);
+    adjustedDay.push(candidates[0]);
   }
 
-  // Too many night → move excess to off
   while (adjustedNight.length > nightNeeded) {
     const sorted = [...adjustedNight].sort((a, b) => totalShifts(b) - totalShifts(a));
-    const removed = sorted[0];
-    adjustedNight = adjustedNight.filter(n => n !== removed);
-    cycleOff.push(removed);
+    adjustedNight = adjustedNight.filter(n => n !== sorted[0]);
+    adjustedOff.push(sorted[0]);
   }
 
-  // Too few night → pull from excess day (if any), never from off
   while (adjustedNight.length < nightNeeded && adjustedDay.length > dayNeeded) {
     const sorted = [...adjustedDay].sort((a, b) => totalShifts(a) - totalShifts(b));
-    const picked = sorted[0];
-    adjustedDay = adjustedDay.filter(n => n !== picked);
-    adjustedNight.push(picked);
+    adjustedDay = adjustedDay.filter(n => n !== sorted[0]);
+    adjustedNight.push(sorted[0]);
+  }
+
+  // Step 4: If STILL short on workers, pull from off as last resort
+  // Prefer phase 4 (first off day) over phase 5 (second off day)
+  while (adjustedDay.length < dayNeeded && adjustedOff.length > 0) {
+    const candidates = adjustedOff
+      .filter(n => !mustNotDay.has(n))
+      .sort((a, b) => {
+        // Prefer phase 4 (first off day) — breaking their first off preserves the second
+        const aFirst = personPhase[a] === 4 ? 0 : 1;
+        const bFirst = personPhase[b] === 4 ? 0 : 1;
+        if (aFirst !== bFirst) return aFirst - bFirst;
+        return totalShifts(a) - totalShifts(b);
+      });
+    if (candidates.length === 0) break;
+    adjustedOff = adjustedOff.filter(n => n !== candidates[0]);
+    adjustedDay.push(candidates[0]);
+  }
+
+  while (adjustedNight.length < nightNeeded && adjustedOff.length > 0) {
+    const candidates = [...adjustedOff].sort((a, b) => {
+      const aFirst = personPhase[a] === 4 ? 0 : 1;
+      const bFirst = personPhase[b] === 4 ? 0 : 1;
+      if (aFirst !== bFirst) return aFirst - bFirst;
+      return totalShifts(a) - totalShifts(b);
+    });
+    if (candidates.length === 0) break;
+    adjustedOff = adjustedOff.filter(n => n !== candidates[0]);
+    adjustedNight.push(candidates[0]);
   }
 
   adjustedDay.forEach(n => { dayShift.push(n); stats[n].day++; });
   adjustedNight.forEach(n => { nightShift.push(n); stats[n].night++; });
-  cycleOff.forEach(n => {
+  adjustedOff.forEach(n => {
     stats[n].off++;
     if (weekend) stats[n].weekendOff++;
   });
