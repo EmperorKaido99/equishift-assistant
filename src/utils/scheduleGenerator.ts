@@ -249,7 +249,7 @@ function assignMixed(
 function assign222Cycle(
   availableRegular: string[],
   allRegular: string[],
-  rotationOffsets: Record<string, number>,
+  precomputed: Record<string, ('D' | 'N' | 'O')[]>,
   stats: Record<string, { day: number; night: number; off: number; weekendOff: number }>,
   dayShift: string[],
   nightShift: string[],
@@ -259,40 +259,33 @@ function assign222Cycle(
   dayIndex: number,
   previousNightWorkers: Set<string>,
 ) {
-  // CYCLE-FIRST approach: follow the 2-2-2 pattern strictly.
-  // Prefer keeping off phase intact; only pull from off as last resort
-  // (prefer phase 4 = first off day, to keep phase 5 = second off day intact).
-
   const mustNotDay = new Set(availableRegular.filter(n => previousNightWorkers.has(n)));
   const totalShifts = (n: string) => stats[n].day + stats[n].night;
 
-  // Step 1: Determine each person's cycle phase
-  const personPhase: Record<string, number> = {};
+  // Get each person's precomputed assignment for today
   const cycleDay: string[] = [];
   const cycleNight: string[] = [];
   const cycleOff: string[] = [];
 
   for (const name of availableRegular) {
-    const phase = (dayIndex + rotationOffsets[name]) % 6;
-    personPhase[name] = phase;
-    if (phase < 2) cycleDay.push(name);
-    else if (phase < 4) cycleNight.push(name);
+    const assignment = precomputed[name]?.[dayIndex] ?? 'O';
+    if (assignment === 'D') cycleDay.push(name);
+    else if (assignment === 'N') cycleNight.push(name);
     else cycleOff.push(name);
   }
 
-  // Step 2: Enforce night→day constraint
+  // Enforce night→day constraint
   const constrainedFromDay = cycleDay.filter(n => mustNotDay.has(n));
   let adjustedDay = cycleDay.filter(n => !mustNotDay.has(n));
   let adjustedNight = [...cycleNight, ...constrainedFromDay];
   let adjustedOff = [...cycleOff];
 
-  // Step 3: Balance — redistribute between day/night first
+  // Balance day/night — prefer moving between day/night, pull from off only as last resort
   while (adjustedDay.length > dayNeeded) {
     const sorted = [...adjustedDay].sort((a, b) => totalShifts(b) - totalShifts(a));
-    const removed = sorted[0];
-    adjustedDay = adjustedDay.filter(n => n !== removed);
-    if (adjustedNight.length < nightNeeded) adjustedNight.push(removed);
-    else adjustedOff.push(removed);
+    adjustedDay = adjustedDay.filter(n => n !== sorted[0]);
+    if (adjustedNight.length < nightNeeded) adjustedNight.push(sorted[0]);
+    else adjustedOff.push(sorted[0]);
   }
 
   while (adjustedDay.length < dayNeeded && adjustedNight.length > nightNeeded) {
@@ -315,16 +308,14 @@ function assign222Cycle(
     adjustedNight.push(sorted[0]);
   }
 
-  // Step 4: If STILL short on workers, pull from off as last resort
-  // Prefer phase 4 (first off day) over phase 5 (second off day)
+  // Last resort: pull from off (prefer those on first off day and fewest shifts)
   while (adjustedDay.length < dayNeeded && adjustedOff.length > 0) {
-    const candidates = adjustedOff
-      .filter(n => !mustNotDay.has(n))
+    const candidates = adjustedOff.filter(n => !mustNotDay.has(n))
       .sort((a, b) => {
-        // Prefer phase 4 (first off day) — breaking their first off preserves the second
-        const aFirst = personPhase[a] === 4 ? 0 : 1;
-        const bFirst = personPhase[b] === 4 ? 0 : 1;
-        if (aFirst !== bFirst) return aFirst - bFirst;
+        // Prefer pulling someone on their first off day (phase 4 in cycle)
+        const aPhase = precomputed[a]?.[dayIndex] === 'O' && dayIndex > 0 && precomputed[a]?.[dayIndex - 1] === 'O' ? 1 : 0;
+        const bPhase = precomputed[b]?.[dayIndex] === 'O' && dayIndex > 0 && precomputed[b]?.[dayIndex - 1] === 'O' ? 1 : 0;
+        if (aPhase !== bPhase) return aPhase - bPhase;
         return totalShifts(a) - totalShifts(b);
       });
     if (candidates.length === 0) break;
@@ -334,9 +325,9 @@ function assign222Cycle(
 
   while (adjustedNight.length < nightNeeded && adjustedOff.length > 0) {
     const candidates = [...adjustedOff].sort((a, b) => {
-      const aFirst = personPhase[a] === 4 ? 0 : 1;
-      const bFirst = personPhase[b] === 4 ? 0 : 1;
-      if (aFirst !== bFirst) return aFirst - bFirst;
+      const aPhase = precomputed[a]?.[dayIndex] === 'O' && dayIndex > 0 && precomputed[a]?.[dayIndex - 1] === 'O' ? 1 : 0;
+      const bPhase = precomputed[b]?.[dayIndex] === 'O' && dayIndex > 0 && precomputed[b]?.[dayIndex - 1] === 'O' ? 1 : 0;
+      if (aPhase !== bPhase) return aPhase - bPhase;
       return totalShifts(a) - totalShifts(b);
     });
     if (candidates.length === 0) break;
