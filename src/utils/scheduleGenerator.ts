@@ -76,8 +76,8 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   const rotationOffsets: Record<string, number> = {};
   if (pattern === '2day2night2off') {
     regularNames.forEach((name, i) => {
-      // Stagger each person by 2 days to ensure coverage
-      rotationOffsets[name] = (i * 2) % 6;
+      // Spread across all 6 phases evenly
+      rotationOffsets[name] = i % 6;
     });
   }
 
