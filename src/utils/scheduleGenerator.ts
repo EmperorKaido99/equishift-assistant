@@ -72,14 +72,27 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   }
 
   // For 2-2-2: build rotation slots (cycle length = 6)
-  // With 10 staff, use offsets that produce ~4 day, ~3 night, ~3 off each day
-  // Offsets: [0,0,1,1,2,2,3,4,4,5] give best daily coverage
-  const rotationOffsets: Record<string, number> = {};
+  // For 2-2-2: precompute each person's ideal schedule for the whole month
+  // Pattern: DD NN OO DD NN OO ... (2 day, 2 night, 2 off, repeat)
+  // Stagger start positions so daily coverage works out
+  let precomputed222: Record<string, ('D' | 'N' | 'O')[]> | null = null;
   if (pattern === '2day2night2off') {
-    const offsets = [0, 0, 1, 1, 2, 2, 3, 4, 4, 5];
-    regularNames.forEach((name, i) => {
-      rotationOffsets[name] = offsets[i % offsets.length];
-    });
+    precomputed222 = {};
+    // Stagger offsets: spread 10 people across 6-day cycle
+    // Use offsets that give ~3-4 day, ~3 night, ~3-4 off each day
+    const offsets = [0, 0, 1, 2, 2, 3, 4, 4, 5, 5];
+    for (let i = 0; i < regularNames.length; i++) {
+      const name = regularNames[i];
+      const offset = offsets[i % offsets.length];
+      const schedule: ('D' | 'N' | 'O')[] = [];
+      for (let d = 0; d < totalDays; d++) {
+        const phase = (d + offset) % 6;
+        if (phase < 2) schedule.push('D');
+        else if (phase < 4) schedule.push('N');
+        else schedule.push('O');
+      }
+      precomputed222[name] = schedule;
+    }
   }
 
   for (let d = 0; d < totalDays; d++) {
