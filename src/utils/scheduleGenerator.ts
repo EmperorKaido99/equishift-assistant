@@ -245,8 +245,9 @@ function assign222Cycle(
   dayIndex: number,
   previousNightWorkers: Set<string>,
 ) {
-  // CYCLE-FIRST approach: follow the 2-2-2 pattern strictly for consecutive offs,
-  // then make minimal adjustments to hit required day/night counts.
+  // CYCLE-FIRST approach: follow the 2-2-2 pattern strictly.
+  // RULE: NEVER pull from off phase to preserve consecutive off days.
+  // Only redistribute between day and night; excess goes to off.
 
   const mustNotDay = new Set(availableRegular.filter(n => previousNightWorkers.has(n)));
   const totalShifts = (n: string) => stats[n].day + stats[n].night;
@@ -268,10 +269,9 @@ function assign222Cycle(
   const constrainedFromDay = cycleDay.filter(n => mustNotDay.has(n));
   let adjustedDay = cycleDay.filter(n => !mustNotDay.has(n));
   let adjustedNight = [...cycleNight, ...constrainedFromDay];
-  let adjustedOff = [...cycleOff];
 
-  // Step 3: Balance counts to match dayNeeded / nightNeeded
-  // Too many day workers → move extras to night or off (prefer those with most shifts)
+  // Step 3: Balance day/night counts — NEVER touch off
+  // Too many day → move excess to night (if needed) or off
   while (adjustedDay.length > dayNeeded) {
     const sorted = [...adjustedDay].sort((a, b) => totalShifts(b) - totalShifts(a));
     const removed = sorted[0];
@@ -279,52 +279,39 @@ function assign222Cycle(
     if (adjustedNight.length < nightNeeded) {
       adjustedNight.push(removed);
     } else {
-      adjustedOff.push(removed);
+      cycleOff.push(removed); // gets extra off — acceptable
     }
   }
 
-  // Too few day workers → pull from night (prefer fewest shifts), then off
-  while (adjustedDay.length < dayNeeded) {
-    // Try night pool first (those not constrained)
-    const nightCandidates = adjustedNight.filter(n => !mustNotDay.has(n))
+  // Too few day → pull ONLY from excess night (never from off)
+  while (adjustedDay.length < dayNeeded && adjustedNight.length > nightNeeded) {
+    const candidates = adjustedNight.filter(n => !mustNotDay.has(n))
       .sort((a, b) => totalShifts(a) - totalShifts(b));
-    if (nightCandidates.length > 0 && adjustedNight.length > nightNeeded) {
-      const picked = nightCandidates[0];
-      adjustedNight = adjustedNight.filter(n => n !== picked);
-      adjustedDay.push(picked);
-    } else {
-      // Pull from off (fewest shifts, not constrained)
-      const offCandidates = adjustedOff.filter(n => !mustNotDay.has(n))
-        .sort((a, b) => totalShifts(a) - totalShifts(b));
-      if (offCandidates.length > 0) {
-        const picked = offCandidates[0];
-        adjustedOff = adjustedOff.filter(n => n !== picked);
-        adjustedDay.push(picked);
-      } else break;
-    }
+    if (candidates.length === 0) break;
+    const picked = candidates[0];
+    adjustedNight = adjustedNight.filter(n => n !== picked);
+    adjustedDay.push(picked);
   }
 
-  // Too many night workers → move extras to off
+  // Too many night → move excess to off
   while (adjustedNight.length > nightNeeded) {
     const sorted = [...adjustedNight].sort((a, b) => totalShifts(b) - totalShifts(a));
     const removed = sorted[0];
     adjustedNight = adjustedNight.filter(n => n !== removed);
-    adjustedOff.push(removed);
+    cycleOff.push(removed);
   }
 
-  // Too few night workers → pull from off
-  while (adjustedNight.length < nightNeeded) {
-    const offCandidates = [...adjustedOff].sort((a, b) => totalShifts(a) - totalShifts(b));
-    if (offCandidates.length > 0) {
-      const picked = offCandidates[0];
-      adjustedOff = adjustedOff.filter(n => n !== picked);
-      adjustedNight.push(picked);
-    } else break;
+  // Too few night → pull from excess day (if any), never from off
+  while (adjustedNight.length < nightNeeded && adjustedDay.length > dayNeeded) {
+    const sorted = [...adjustedDay].sort((a, b) => totalShifts(a) - totalShifts(b));
+    const picked = sorted[0];
+    adjustedDay = adjustedDay.filter(n => n !== picked);
+    adjustedNight.push(picked);
   }
 
   adjustedDay.forEach(n => { dayShift.push(n); stats[n].day++; });
   adjustedNight.forEach(n => { nightShift.push(n); stats[n].night++; });
-  adjustedOff.forEach(n => {
+  cycleOff.forEach(n => {
     stats[n].off++;
     if (weekend) stats[n].weekendOff++;
   });
