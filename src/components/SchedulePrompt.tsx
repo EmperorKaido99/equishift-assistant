@@ -11,6 +11,7 @@ const PATTERNS: { value: SchedulePattern; label: string; desc: string; icon: Rea
   { value: 'mixed', label: 'Mixed Shifts', desc: 'Balanced mix of day and night shifts throughout the month', icon: <Shuffle className="h-5 w-5" /> },
   { value: '2week', label: '2 Weeks Day / 2 Weeks Night', desc: 'First half of month on one shift, second half on the other', icon: <ArrowRightLeft className="h-5 w-5" /> },
   { value: '1week', label: '1 Week Day / 1 Week Night', desc: 'Alternate between day and night shifts every week', icon: <Zap className="h-5 w-5" /> },
+  { value: '2day2night2off', label: '2 Day / 2 Night / 2 Off', desc: 'Rotating 6-day cycle: 2 days on day shift, 2 on night, then 2 off', icon: <Users className="h-5 w-5" /> },
 ];
 
 const SchedulePrompt: React.FC<SchedulePromptProps> = ({ onGenerate }) => {

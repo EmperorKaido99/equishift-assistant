@@ -40,7 +40,7 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
-export type SchedulePattern = 'mixed' | '2week' | '1week';
+export type SchedulePattern = 'mixed' | '2week' | '1week' | '2day2night2off';
 
 export interface ScheduleOptions {
   pattern: SchedulePattern;
