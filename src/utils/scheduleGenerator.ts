@@ -228,13 +228,20 @@ function assignPatternBased(
   dayNeeded: number,
   nightNeeded: number,
   weekend: boolean,
+  previousNightWorkers: Set<string>,
 ) {
-  // dayGroup (5 people) → pick dayNeeded for day shift, rest off
-  // nightGroup (5 people) → pick nightNeeded for night shift, rest off
-  const dayGroupSorted = [...dayGroup].sort((a, b) =>
+  // Anyone who worked night yesterday cannot do day today
+  // If they're in dayGroup, move them to night; swap someone from nightGroup to day
+  const mustNotDay = new Set(dayGroup.filter(n => previousNightWorkers.has(n)));
+
+  // Remove mustNotDay from dayGroup, add to nightGroup pool
+  const adjustedDayGroup = dayGroup.filter(n => !mustNotDay.has(n));
+  const adjustedNightGroup = [...nightGroup, ...Array.from(mustNotDay)];
+
+  const dayGroupSorted = [...adjustedDayGroup].sort((a, b) =>
     (stats[a].day + stats[a].night) - (stats[b].day + stats[b].night)
   );
-  const nightGroupSorted = [...nightGroup].sort((a, b) =>
+  const nightGroupSorted = [...adjustedNightGroup].sort((a, b) =>
     (stats[a].day + stats[a].night) - (stats[b].day + stats[b].night)
   );
 
