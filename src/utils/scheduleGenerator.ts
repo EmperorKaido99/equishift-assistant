@@ -72,27 +72,21 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   }
 
   // For 2-2-2: build rotation slots (cycle length = 6)
-  // For 2-2-2: precompute each person's ideal schedule for the whole month
-  // Pattern: DD NN OO DD NN OO ... (2 day, 2 night, 2 off, repeat)
-  // Stagger start positions so daily coverage works out
-  let precomputed222: Record<string, ('D' | 'N' | 'O')[]> | null = null;
+  // For 2-2-2: track each person's cycle state
+  // State tracks consecutive count of current assignment type
+  const cycleState: Record<string, { type: 'D' | 'N' | 'O'; count: number }> = {};
   if (pattern === '2day2night2off') {
-    precomputed222 = {};
-    // Stagger offsets: spread 10 people across 6-day cycle
-    // Use offsets that give ~3-4 day, ~3 night, ~3-4 off each day
-    const offsets = [0, 0, 1, 2, 2, 3, 4, 4, 5, 5];
-    for (let i = 0; i < regularNames.length; i++) {
-      const name = regularNames[i];
-      const offset = offsets[i % offsets.length];
-      const schedule: ('D' | 'N' | 'O')[] = [];
-      for (let d = 0; d < totalDays; d++) {
-        const phase = (d + offset) % 6;
-        if (phase < 2) schedule.push('D');
-        else if (phase < 4) schedule.push('N');
-        else schedule.push('O');
-      }
-      precomputed222[name] = schedule;
-    }
+    // Stagger initial states so not everyone starts the same
+    const initialStates: { type: 'D' | 'N' | 'O'; count: number }[] = [
+      { type: 'D', count: 0 }, { type: 'D', count: 1 },
+      { type: 'N', count: 0 }, { type: 'N', count: 1 },
+      { type: 'O', count: 0 }, { type: 'O', count: 1 },
+      { type: 'D', count: 0 }, { type: 'D', count: 1 },
+      { type: 'N', count: 0 }, { type: 'N', count: 1 },
+    ];
+    regularNames.forEach((name, i) => {
+      cycleState[name] = { ...initialStates[i % initialStates.length] };
+    });
   }
 
   for (let d = 0; d < totalDays; d++) {
