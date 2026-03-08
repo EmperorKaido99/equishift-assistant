@@ -4,7 +4,7 @@ import { REGULAR_STAFF } from '@/types/schedule';
 
 const regularNames = REGULAR_STAFF.map(s => s.name);
 
-function findViolations(year: number, month: number, pattern: 'mixed' | '1week' | '2week') {
+function findViolations(year: number, month: number, pattern: 'mixed' | '1week' | '2week' | '2day2night2off') {
   const schedule = generateSchedule(year, month, { pattern });
   const violations: string[] = [];
 
