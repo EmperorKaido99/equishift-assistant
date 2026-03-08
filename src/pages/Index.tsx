@@ -7,7 +7,8 @@ import StaffStatsBar from '@/components/StaffStatsBar';
 import StaffLegend from '@/components/StaffLegend';
 import SchedulePrompt from '@/components/SchedulePrompt';
 import PrintableTable from '@/components/PrintableTable';
-import { Printer, Calendar, MessageCircle, ArrowLeft, Palette } from 'lucide-react';
+import { Printer, Calendar, MessageCircle, ArrowLeft, Palette, FileSpreadsheet } from 'lucide-react';
+import { exportToExcel } from '@/utils/excelExport';
 
 const Index: React.FC = () => {
   const {
@@ -83,6 +84,13 @@ const Index: React.FC = () => {
                     title="Print schedule"
                   >
                     <Printer className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => schedule && exportToExcel(schedule)}
+                    className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Export to Excel"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
                   </button>
                 </>
               )}
