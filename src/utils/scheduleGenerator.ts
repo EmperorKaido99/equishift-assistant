@@ -304,6 +304,36 @@ function ensureWeekendOff(days: DaySchedule[], regularNames: string[]) {
   }
 }
 
+/** Fix any night→day violations introduced by post-processing swaps */
+function fixNightToDayViolations(days: DaySchedule[], regularNames: string[]) {
+  for (let d = 1; d < days.length; d++) {
+    const prevNight = new Set(days[d - 1].nightShift.filter(n => regularNames.includes(n)));
+    const today = days[d];
+
+    for (const name of Array.from(prevNight)) {
+      const dayIdx = today.dayShift.indexOf(name);
+      if (dayIdx === -1) continue; // not on day shift, no violation
+
+      // Find someone on night shift today (or off) who wasn't on night yesterday to swap
+      const working = new Set([...today.dayShift, ...today.nightShift]);
+      const offToday = regularNames.filter(n => !working.has(n) && !prevNight.has(n));
+
+      if (offToday.length > 0) {
+        // Swap with someone who's off
+        today.dayShift[dayIdx] = offToday[0];
+      } else {
+        // Try swapping with a night worker who wasn't on night yesterday
+        const nightSwapIdx = today.nightShift.findIndex(n => regularNames.includes(n) && !prevNight.has(n));
+        if (nightSwapIdx !== -1) {
+          const swapName = today.nightShift[nightSwapIdx];
+          today.dayShift[dayIdx] = swapName;
+          today.nightShift[nightSwapIdx] = name;
+        }
+      }
+    }
+  }
+}
+
 /** Reorder names so grouped members are adjacent */
 function reorderByGroups(names: string[], groups: string[][]): string[] {
   const used = new Set<string>();
