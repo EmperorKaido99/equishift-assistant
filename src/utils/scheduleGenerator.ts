@@ -144,8 +144,12 @@ function assignMixed(
   totalDays: number,
   nameToGroup: Record<string, number>,
   groups: string[][],
+  previousNightWorkers: Set<string>,
 ) {
   const offPeople = new Set<string>();
+
+  // People who worked night last night CANNOT work day today — they must be off or on night
+  const mustNotDay = new Set(regularNames.filter(n => previousNightWorkers.has(n)));
 
   // Priority: give weekend off to those who haven't had one yet
   if (weekend) {
@@ -170,10 +174,32 @@ function assignMixed(
 
   const working = regularNames.filter(n => !offPeople.has(n));
 
-  // Assign day/night: prefer day for those with fewest day shifts, night for fewest night
-  const sortedForDay = [...working].sort((a, b) => stats[a].day - stats[b].day);
+  // Separate workers: those who MUST NOT do day (previous night) go to night first
+  const mustNightWorkers = working.filter(n => mustNotDay.has(n));
+  const flexWorkers = working.filter(n => !mustNotDay.has(n));
+
+  // Fill night shift: prioritize mustNightWorkers, then by fewest night shifts
+  const nightWorkers: string[] = [];
+  for (const n of mustNightWorkers) {
+    if (nightWorkers.length >= nightNeeded) break;
+    nightWorkers.push(n);
+  }
+  const remainingFlex = [...flexWorkers].sort((a, b) => stats[a].night - stats[b].night);
+  for (const n of remainingFlex) {
+    if (nightWorkers.length >= nightNeeded) break;
+    nightWorkers.push(n);
+  }
+
+  // If still not enough night workers, pull from mustNight who didn't fit
+  const nightSet = new Set(nightWorkers);
+
+  // Fill day shift from remaining workers (excluding night workers and mustNotDay)
+  const dayPool = working.filter(n => !nightSet.has(n) && !mustNotDay.has(n));
+  const sortedForDay = [...dayPool].sort((a, b) => stats[a].day - stats[b].day);
   const dayWorkers = sortedForDay.slice(0, dayNeeded);
-  const nightWorkers = working.filter(n => !dayWorkers.includes(n)).slice(0, nightNeeded);
+
+  // Any mustNotDay workers not on night go to off
+  const mustNotDayLeftover = mustNightWorkers.filter(n => !nightSet.has(n));
 
   dayWorkers.forEach(n => {
     dayShift.push(n);
@@ -184,6 +210,10 @@ function assignMixed(
     stats[n].night++;
   });
   offPeople.forEach(n => {
+    stats[n].off++;
+    if (weekend) stats[n].weekendOff++;
+  });
+  mustNotDayLeftover.forEach(n => {
     stats[n].off++;
     if (weekend) stats[n].weekendOff++;
   });
