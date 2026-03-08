@@ -26,7 +26,7 @@ describe('No night-then-day violations', () => {
     [2026, 0], [2026, 1], [2026, 2], [2026, 3], [2026, 4], [2026, 5],
   ];
 
-  for (const pattern of ['mixed', '1week', '2week'] as const) {
+  for (const pattern of ['mixed', '1week', '2week', '2day2night2off'] as const) {
     it(`pattern="${pattern}" has no violations across 6 months`, () => {
       for (const [year, month] of months) {
         const violations = findViolations(year, month, pattern);
