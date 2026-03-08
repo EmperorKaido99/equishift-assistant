@@ -85,6 +85,13 @@ const Index: React.FC = () => {
                   >
                     <Printer className="h-4 w-4" />
                   </button>
+                  <button
+                    onClick={() => schedule && exportToExcel(schedule)}
+                    className="rounded-lg border border-border p-2 text-muted-foreground hover:text-foreground transition-colors"
+                    title="Export to Excel"
+                  >
+                    <FileSpreadsheet className="h-4 w-4" />
+                  </button>
                 </>
               )}
             </div>
