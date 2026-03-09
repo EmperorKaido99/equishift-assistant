@@ -243,23 +243,21 @@ function assignMixed(
 }
 
 /**
- * 2-2-2 Cycle Assignment using fixed rotation offsets.
+ * 2-2-2 Cycle Assignment using fixed rotation offsets + fairness tracking.
  * 
  * Each person has a fixed offset (0-5). On day d:
  *   phase = (d + offset) % 6
  *   0,1 → Day | 2,3 → Night | 4,5 → Off
  * 
- * This naturally produces consecutive pairs (2 day, 2 night, 2 off).
- * The cycle also guarantees no night→day transition (night is always followed
- * by night or off in the rotation).
- * 
- * With 10 people and offset distribution [2,1,2,1,2,2], most days produce
- * exactly 3D/3N/4O. On ~2/6 days we get 4D or 4N and need 1 minimal adjustment.
+ * When adjustments are needed (10 people don't split evenly into 3+3+4),
+ * bumpCount tracks how many times each person has been bumped off their
+ * ideal position, ensuring fair rotation of the burden.
  */
 function assign222Cycle(
   availableRegular: string[],
   allRegular: string[],
   rotationOffsets: Record<string, number>,
+  bumpCount: Record<string, number>,
   stats: Record<string, { day: number; night: number; off: number; weekendOff: number }>,
   dayShift: string[],
   nightShift: string[],
@@ -274,6 +272,7 @@ function assign222Cycle(
 
   // Compute ideal assignment from rotation offset
   const pools: { D: string[]; N: string[]; O: string[] } = { D: [], N: [], O: [] };
+  const idealAssignment: Record<string, 'D' | 'N' | 'O'> = {};
 
   for (const name of availableRegular) {
     const phase = (dayIndex + rotationOffsets[name]) % 6;
@@ -282,50 +281,68 @@ function assign222Cycle(
     else if (phase < 4) assignment = 'N';
     else assignment = 'O';
 
-    // Safety: if someone ended up on day but worked night yesterday (e.g. day 0 of month)
     if (assignment === 'D' && mustNotDay.has(name)) {
       assignment = 'N';
     }
 
+    idealAssignment[name] = assignment;
     pools[assignment].push(name);
   }
 
   const offNeeded = Math.max(0, availableRegular.length - dayNeeded - nightNeeded);
 
-  // --- Adjust excess day workers → move to off (those with most shifts first) ---
+  // When bumping from D/N to O: prefer those bumped LEAST (lowest bumpCount),
+  // tiebreak by most totalShifts (give rest to those who've worked most)
+  const bumpToOffSort = (a: string, b: string) => {
+    if (bumpCount[a] !== bumpCount[b]) return bumpCount[a] - bumpCount[b]; // least bumped first
+    return totalShifts(b) - totalShifts(a); // most shifts first
+  };
+
+  // When pulling from O to work: prefer those bumped MOST (highest bumpCount = most "owed"),
+  // tiebreak by fewest totalShifts
+  const pullFromOffSort = (a: string, b: string) => {
+    if (bumpCount[a] !== bumpCount[b]) return bumpCount[b] - bumpCount[a]; // most bumped first
+    return totalShifts(a) - totalShifts(b); // fewest shifts first
+  };
+
+  // --- Adjust excess day workers → move to off ---
   while (pools.D.length > dayNeeded) {
-    pools.D.sort((a, b) => totalShifts(b) - totalShifts(a));
+    pools.D.sort(bumpToOffSort);
     const moved = pools.D.shift()!;
     pools.O.push(moved);
+    bumpCount[moved]++;
   }
 
   // --- Adjust excess night workers → move to off ---
   while (pools.N.length > nightNeeded) {
-    pools.N.sort((a, b) => totalShifts(b) - totalShifts(a));
+    pools.N.sort(bumpToOffSort);
     const moved = pools.N.shift()!;
     pools.O.push(moved);
+    bumpCount[moved]++;
   }
 
-  // --- Fill day shortage from off (fewest shifts, not mustNotDay) ---
+  // --- Fill day shortage from off ---
   while (pools.D.length < dayNeeded && pools.O.length > offNeeded) {
     const candidates = pools.O.filter(n => !mustNotDay.has(n));
     if (candidates.length === 0) break;
-    candidates.sort((a, b) => totalShifts(a) - totalShifts(b));
+    candidates.sort(pullFromOffSort);
     const moved = candidates[0];
     pools.O = pools.O.filter(n => n !== moved);
     pools.D.push(moved);
+    bumpCount[moved]++;
   }
 
-  // --- Fill night shortage from off (fewest shifts) ---
+  // --- Fill night shortage from off ---
   while (pools.N.length < nightNeeded && pools.O.length > offNeeded) {
     const candidates = [...pools.O];
-    candidates.sort((a, b) => totalShifts(a) - totalShifts(b));
+    candidates.sort(pullFromOffSort);
     const moved = candidates[0];
     pools.O = pools.O.filter(n => n !== moved);
     pools.N.push(moved);
+    bumpCount[moved]++;
   }
 
-  // --- Last resort: if day still short, pull from night (swap) ---
+  // --- Last resort: swap night→day ---
   while (pools.D.length < dayNeeded && pools.N.length > nightNeeded) {
     const candidates = pools.N.filter(n => !mustNotDay.has(n));
     if (candidates.length === 0) break;
