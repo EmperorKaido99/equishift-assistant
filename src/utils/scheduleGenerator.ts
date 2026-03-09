@@ -79,21 +79,16 @@ export function generateSchedule(year: number, month: number, options?: Schedule
     });
   }
 
-  // For 2-2-2: build rotation slots (cycle length = 6)
-  // For 2-2-2: track each person's cycle state
-  // State tracks consecutive count of current assignment type
-  const cycleState: Record<string, { type: 'D' | 'N' | 'O'; count: number }> = {};
+  // For 2-2-2: fixed rotation offsets (cycle length = 6)
+  // Each person has an offset 0-5. On day d, phase = (d + offset) % 6:
+  //   phase 0,1 = Day | phase 2,3 = Night | phase 4,5 = Off
+  // Offset distribution [2,1,2,1,2,2] ensures most days need ≤1 adjustment.
+  const rotationOffsets: Record<string, number> = {};
   if (pattern === '2day2night2off') {
-    // Stagger initial states so not everyone starts the same
-    const initialStates: { type: 'D' | 'N' | 'O'; count: number }[] = [
-      { type: 'D', count: 0 }, { type: 'D', count: 1 },
-      { type: 'N', count: 0 }, { type: 'N', count: 1 },
-      { type: 'O', count: 0 }, { type: 'O', count: 1 },
-      { type: 'D', count: 0 }, { type: 'D', count: 1 },
-      { type: 'N', count: 0 }, { type: 'N', count: 1 },
-    ];
+    // Interleaved offsets for maximum spread
+    const offsetPattern = [0, 2, 4, 5, 1, 3, 0, 2, 4, 5];
     regularNames.forEach((name, i) => {
-      cycleState[name] = { ...initialStates[i % initialStates.length] };
+      rotationOffsets[name] = offsetPattern[i % offsetPattern.length];
     });
   }
 
