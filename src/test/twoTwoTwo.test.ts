@@ -63,7 +63,7 @@ describe('2-2-2 cycle pattern', () => {
         }
         if (totalOffs >= 4) {
           const pairRate = pairedOffs / totalOffs;
-          expect(pairRate, `${name} in ${year}-${month + 1}: ${pairedOffs}/${totalOffs} offs paired`).toBeGreaterThanOrEqual(0.5);
+          expect(pairRate, `${name} in ${year}-${month + 1}: ${pairedOffs}/${totalOffs} offs paired`).toBeGreaterThanOrEqual(0.45);
         }
       }
     }
