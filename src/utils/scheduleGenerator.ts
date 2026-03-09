@@ -280,21 +280,24 @@ function assign222Cycle(
 
   const offNeeded = Math.max(0, availableRegular.length - dayNeeded - nightNeeded);
 
-  // Bump D/N → O: prefer 2nd day of block (odd phase), then lowest bumpCount, then most shifts
+  // Bump D/N → O: PRIMARY sort by most totalShifts (balance first), then phase tiebreak
+  const nameIdx: Record<string, number> = {};
+  availableRegular.forEach((n, i) => { nameIdx[n] = i; });
   const bumpSort = (a: string, b: string) => {
-    const aOdd = phases[a] % 2; const bOdd = phases[b] % 2;
-    if (aOdd !== bOdd) return bOdd - aOdd; // odd phase (2nd day) bumped first
-    if (bumpCount[a] !== bumpCount[b]) return bumpCount[a] - bumpCount[b];
-    return totalShifts(b) - totalShifts(a);
+    const diff = totalShifts(b) - totalShifts(a); // most shifts bumped first
+    if (diff !== 0) return diff;
+    // Rotating tiebreaker to prevent always picking same person
+    return ((nameIdx[a] + dayIndex) % 10) - ((nameIdx[b] + dayIndex) % 10);
   };
 
-  // Pull O → work: NEVER phase 5 if avoidable, prefer phase 4, then highest bumpCount
+  // Pull O → work: NEVER phase 5 if avoidable, then fewest totalShifts
   const pullSort = (a: string, b: string) => {
     const aProt = phases[a] === 5 ? 1 : 0;
     const bProt = phases[b] === 5 ? 1 : 0;
     if (aProt !== bProt) return aProt - bProt;
-    if (bumpCount[a] !== bumpCount[b]) return bumpCount[b] - bumpCount[a];
-    return totalShifts(a) - totalShifts(b);
+    const diff = totalShifts(a) - totalShifts(b); // fewest shifts pulled first
+    if (diff !== 0) return diff;
+    return ((nameIdx[a] + dayIndex) % 10) - ((nameIdx[b] + dayIndex) % 10);
   };
 
   while (pools.D.length > dayNeeded) {
