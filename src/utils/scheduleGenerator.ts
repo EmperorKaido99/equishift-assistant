@@ -80,15 +80,14 @@ export function generateSchedule(year: number, month: number, options?: Schedule
   }
 
   // For 2-2-2: fixed rotation offsets (cycle length = 6)
-  // Each person has an offset 0-5. On day d, phase = (d + offset) % 6:
-  //   phase 0,1 = Day | phase 2,3 = Night | phase 4,5 = Off
-  // Offset distribution [2,1,2,1,2,2] ensures most days need ≤1 adjustment.
   const rotationOffsets: Record<string, number> = {};
+  // Track how many times each person has been bumped off their ideal cycle position
+  const bumpCount: Record<string, number> = {};
   if (pattern === '2day2night2off') {
-    // Interleaved offsets for maximum spread
     const offsetPattern = [0, 2, 4, 5, 1, 3, 0, 2, 4, 5];
     regularNames.forEach((name, i) => {
       rotationOffsets[name] = offsetPattern[i % offsetPattern.length];
+      bumpCount[name] = 0;
     });
   }
 
