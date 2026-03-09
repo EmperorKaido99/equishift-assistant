@@ -108,7 +108,7 @@ export function generateSchedule(year: number, month: number, options?: Schedule
     if (isWeekday(dow) && !unavailable.has('Tracey')) dayShift.push('Tracey');
     if (isCleanerDay(dow) && !unavailable.has('Shariefa')) dayShift.push('Shariefa');
 
-    const dayNeeded = weekend ? WEEKEND_DAY_REGULAR : WEEKDAY_DAY_REGULAR;
+    const dayNeeded = weekend ? getWeekendDayRegular(year, month) : WEEKDAY_DAY_REGULAR;
     const nightNeeded = NIGHT_REGULAR;
     const totalNeeded = Math.min(dayNeeded + nightNeeded, availableRegular.length);
     const offCount = availableRegular.length - totalNeeded;
