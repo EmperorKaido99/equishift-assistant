@@ -243,15 +243,10 @@ function assignMixed(
 }
 
 /**
- * 2-2-2 Cycle Assignment using fixed rotation offsets + fairness tracking.
- * 
- * Each person has a fixed offset (0-5). On day d:
- *   phase = (d + offset) % 6
- *   0,1 → Day | 2,3 → Night | 4,5 → Off
- * 
- * When adjustments are needed (10 people don't split evenly into 3+3+4),
- * bumpCount tracks how many times each person has been bumped off their
- * ideal position, ensuring fair rotation of the burden.
+ * 2-2-2 Cycle with fixed offsets + phase-aware bumping.
+ * Phase 0,1=Day | 2,3=Night | 4,5=Off
+ * Protects phase 5 (2nd off day) from being pulled to work.
+ * Prefers bumping phase 1/3 (2nd work day) over phase 0/2 (1st work day).
  */
 function assign222Cycle(
   availableRegular: string[],
@@ -270,95 +265,73 @@ function assign222Cycle(
   const totalShifts = (n: string) => stats[n].day + stats[n].night;
   const mustNotDay = new Set(availableRegular.filter(n => previousNightWorkers.has(n)));
 
-  // Compute ideal assignment from rotation offset
+  const phases: Record<string, number> = {};
   const pools: { D: string[]; N: string[]; O: string[] } = { D: [], N: [], O: [] };
-  const idealAssignment: Record<string, 'D' | 'N' | 'O'> = {};
 
   for (const name of availableRegular) {
-    const phase = (dayIndex + rotationOffsets[name]) % 6;
+    phases[name] = (dayIndex + rotationOffsets[name]) % 6;
     let assignment: 'D' | 'N' | 'O';
-    if (phase < 2) assignment = 'D';
-    else if (phase < 4) assignment = 'N';
+    if (phases[name] < 2) assignment = 'D';
+    else if (phases[name] < 4) assignment = 'N';
     else assignment = 'O';
-
-    if (assignment === 'D' && mustNotDay.has(name)) {
-      assignment = 'N';
-    }
-
-    idealAssignment[name] = assignment;
+    if (assignment === 'D' && mustNotDay.has(name)) assignment = 'N';
     pools[assignment].push(name);
   }
 
   const offNeeded = Math.max(0, availableRegular.length - dayNeeded - nightNeeded);
 
-  // When bumping from D/N to O: prefer those bumped LEAST (lowest bumpCount),
-  // tiebreak by most totalShifts (give rest to those who've worked most)
-  const bumpToOffSort = (a: string, b: string) => {
-    if (bumpCount[a] !== bumpCount[b]) return bumpCount[a] - bumpCount[b]; // least bumped first
-    return totalShifts(b) - totalShifts(a); // most shifts first
+  // Bump D/N → O: prefer 2nd day of block (odd phase), then lowest bumpCount, then most shifts
+  const bumpSort = (a: string, b: string) => {
+    const aOdd = phases[a] % 2; const bOdd = phases[b] % 2;
+    if (aOdd !== bOdd) return bOdd - aOdd; // odd phase (2nd day) bumped first
+    if (bumpCount[a] !== bumpCount[b]) return bumpCount[a] - bumpCount[b];
+    return totalShifts(b) - totalShifts(a);
   };
 
-  // When pulling from O to work: prefer those bumped MOST (highest bumpCount = most "owed"),
-  // tiebreak by fewest totalShifts
-  const pullFromOffSort = (a: string, b: string) => {
-    if (bumpCount[a] !== bumpCount[b]) return bumpCount[b] - bumpCount[a]; // most bumped first
-    return totalShifts(a) - totalShifts(b); // fewest shifts first
+  // Pull O → work: NEVER phase 5 if avoidable, prefer phase 4, then highest bumpCount
+  const pullSort = (a: string, b: string) => {
+    const aProt = phases[a] === 5 ? 1 : 0;
+    const bProt = phases[b] === 5 ? 1 : 0;
+    if (aProt !== bProt) return aProt - bProt;
+    if (bumpCount[a] !== bumpCount[b]) return bumpCount[b] - bumpCount[a];
+    return totalShifts(a) - totalShifts(b);
   };
 
-  // --- Adjust excess day workers → move to off ---
   while (pools.D.length > dayNeeded) {
-    pools.D.sort(bumpToOffSort);
-    const moved = pools.D.shift()!;
-    pools.O.push(moved);
-    bumpCount[moved]++;
+    pools.D.sort(bumpSort);
+    bumpCount[pools.D[0]]++;
+    pools.O.push(pools.D.shift()!);
   }
-
-  // --- Adjust excess night workers → move to off ---
   while (pools.N.length > nightNeeded) {
-    pools.N.sort(bumpToOffSort);
-    const moved = pools.N.shift()!;
-    pools.O.push(moved);
-    bumpCount[moved]++;
+    pools.N.sort(bumpSort);
+    bumpCount[pools.N[0]]++;
+    pools.O.push(pools.N.shift()!);
   }
-
-  // --- Fill day shortage from off ---
   while (pools.D.length < dayNeeded && pools.O.length > offNeeded) {
-    const candidates = pools.O.filter(n => !mustNotDay.has(n));
-    if (candidates.length === 0) break;
-    candidates.sort(pullFromOffSort);
-    const moved = candidates[0];
-    pools.O = pools.O.filter(n => n !== moved);
-    pools.D.push(moved);
-    bumpCount[moved]++;
+    const c = pools.O.filter(n => !mustNotDay.has(n));
+    if (!c.length) break;
+    c.sort(pullSort);
+    bumpCount[c[0]]++;
+    pools.O = pools.O.filter(n => n !== c[0]);
+    pools.D.push(c[0]);
   }
-
-  // --- Fill night shortage from off ---
   while (pools.N.length < nightNeeded && pools.O.length > offNeeded) {
-    const candidates = [...pools.O];
-    candidates.sort(pullFromOffSort);
-    const moved = candidates[0];
-    pools.O = pools.O.filter(n => n !== moved);
-    pools.N.push(moved);
-    bumpCount[moved]++;
+    const c = [...pools.O]; c.sort(pullSort);
+    bumpCount[c[0]]++;
+    pools.O = pools.O.filter(n => n !== c[0]);
+    pools.N.push(c[0]);
   }
-
-  // --- Last resort: swap night→day ---
   while (pools.D.length < dayNeeded && pools.N.length > nightNeeded) {
-    const candidates = pools.N.filter(n => !mustNotDay.has(n));
-    if (candidates.length === 0) break;
-    candidates.sort((a, b) => totalShifts(a) - totalShifts(b));
-    const moved = candidates[0];
-    pools.N = pools.N.filter(n => n !== moved);
-    pools.D.push(moved);
+    const c = pools.N.filter(n => !mustNotDay.has(n));
+    if (!c.length) break;
+    c.sort((a, b) => totalShifts(a) - totalShifts(b));
+    pools.N = pools.N.filter(n => n !== c[0]);
+    pools.D.push(c[0]);
   }
 
-  // Assign final pools
   pools.D.forEach(n => { dayShift.push(n); stats[n].day++; });
   pools.N.forEach(n => { nightShift.push(n); stats[n].night++; });
-  pools.O.forEach(n => {
-    stats[n].off++;
-    if (weekend) stats[n].weekendOff++;
-  });
+  pools.O.forEach(n => { stats[n].off++; if (weekend) stats[n].weekendOff++; });
 }
 function assignPatternBased(
   dayGroup: string[],
