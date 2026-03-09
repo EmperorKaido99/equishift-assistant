@@ -15,18 +15,26 @@ function isWeekday(dayOfWeek: number): boolean {
 }
 
 /**
+ * From April 2026 onward, weekend day shifts use 3 regular staff (was 4).
+ * This aligns with the 2-2-2 cycle math (10 staff, 3D+3N=6 working, 4 off).
+ */
+function getWeekendDayRegular(year: number, month: number): number {
+  if (year > 2026 || (year >= 2026 && month >= 3)) return 3;
+  return 4;
+}
+
+/**
  * SHIFT RULES:
  * - Tracey (Supervisor): Mon-Fri day only
- * - Shariefa (Cleaner): Mon/Wed/Fri day only (additional, not counted in the 4)
+ * - Shariefa (Cleaner): Mon/Wed/Fri day only (additional, not counted)
  * - Weekday day shift: 4 people total (Tracey + 3 regular)
- * - Weekend day shift: 4 regular staff (no Tracey)
- * - Night shift (every day): 3 regular staff (never Tracey or Shariefa)
- * - Each person: aim for 2 off days per week
+ * - Weekend day shift: 3 regular (from April 2026) or 4 regular (before)
+ * - Night shift (every day): 3 regular staff
+ * - 2-2-2 cycle: 2 day shifts, 2 night shifts, 2 off days (rotation)
  * - Everyone gets at least 1 weekend off per month
  */
 
 const WEEKDAY_DAY_REGULAR = 3;  // + Tracey = 4 total
-const WEEKEND_DAY_REGULAR = 4;  // no Tracey
 const NIGHT_REGULAR = 3;        // always 3
 
 export function generateSchedule(year: number, month: number, options?: ScheduleOptions, leaves?: StaffLeave[]): MonthSchedule {
